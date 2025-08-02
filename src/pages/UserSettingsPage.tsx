@@ -50,6 +50,7 @@ export default function UserSettingsPage() {
   const [googleTesting, setGoogleTesting] = useState(false);
   const [aiTesting, setAiTesting] = useState(false);
   const [creatingSheet, setCreatingSheet] = useState(false);
+  const [sheetUrl, setSheetUrl] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -65,6 +66,10 @@ export default function UserSettingsPage() {
   const [aiApiToken, setAiApiToken] = useState("");
   const [aiConnectionStatus, setAiConnectionStatus] = useState(false);
 
+  // Sheet settings
+  const [googleSheetId, setGoogleSheetId] = useState("");
+  const [googleSheetUrl, setGoogleSheetUrl] = useState("");
+
   // Load existing settings
   useEffect(() => {
     const loadSettings = async () => {
@@ -75,6 +80,8 @@ export default function UserSettingsPage() {
           setGoogleClientSecret(settings.google_client_secret || "");
           setGoogleRedirectUri(settings.google_redirect_uri || "");
           setGoogleConnectionStatus(settings.google_connection_status || false);
+          setGoogleSheetId(settings.google_sheet_id || "");
+          setGoogleSheetUrl(settings.google_sheet_url || "");
           setAiService(settings.ai_service || "");
           setAiModel(settings.ai_model || "");
           setAiApiToken(settings.ai_api_token || "");
@@ -186,6 +193,8 @@ export default function UserSettingsPage() {
         googleClientSecret,
         googleRedirectUri,
         googleConnectionStatus,
+        googleSheetId,
+        googleSheetUrl,
         aiService,
         aiModel,
         aiApiToken,
@@ -221,9 +230,12 @@ export default function UserSettingsPage() {
     try {
       const result = await createGoogleSheet();
       if (result.success) {
+        setSheetUrl(result.sheetUrl || "");
+        setGoogleSheetId(result.sheetId || "");
+        setGoogleSheetUrl(result.sheetUrl || "");
         toast({
           title: "作成完了",
-          description: "Google Sheetが正常に作成されました",
+          description: `Google Sheetが正常に作成されました`,
         });
       } else {
         toast({
@@ -405,7 +417,7 @@ export default function UserSettingsPage() {
               SNS投稿管理用のGoogle Sheetを作成します
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <Button
               onClick={handleCreateGoogleSheet}
               disabled={creatingSheet || !googleConnectionStatus}
@@ -419,9 +431,24 @@ export default function UserSettingsPage() {
               Google Sheet を作成
             </Button>
             {!googleConnectionStatus && (
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="text-sm text-muted-foreground">
                 Google連携設定を完了してからご利用ください
               </p>
+            )}
+            {googleSheetUrl && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm font-medium text-green-800 mb-2">
+                  Google Sheet が作成されました:
+                </p>
+                <a
+                  href={googleSheetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:text-blue-800 underline break-all"
+                >
+                  {googleSheetUrl}
+                </a>
+              </div>
             )}
           </CardContent>
         </Card>

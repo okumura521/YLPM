@@ -35,6 +35,8 @@ import {
 
 // Import PlatformSelector directly
 import PlatformSelector from "./PlatformSelector";
+import { addPostToGoogleSheet, addLogEntry } from "@/lib/supabase";
+import { useToast } from "@/components/ui/use-toast";
 
 interface PostFormProps {
   initialData?: PostData;
@@ -62,6 +64,7 @@ const PostForm: React.FC<PostFormProps> = ({
   onCancel = () => {},
   isEditing = false,
 }) => {
+  const { toast } = useToast();
   // Initialize from post prop or initialData or defaults
   const initData = post ||
     initialData || {
@@ -147,8 +150,19 @@ const PostForm: React.FC<PostFormProps> = ({
     }
 
     setIsGeneratingDraft(true);
-    // Simulate AI draft generation for each platform
-    setTimeout(() => {
+    addLogEntry("INFO", "Starting AI draft generation", {
+      content,
+      aiPrompt,
+      platforms: selectedPlatforms,
+    });
+
+    try {
+      // In a real implementation, this would call the actual AI API
+      // For now, we'll simulate the API call with more realistic behavior
+
+      // Simulate API call delay
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
       const generated: Record<string, string> = {};
 
       selectedPlatforms.forEach((platform) => {
@@ -178,8 +192,23 @@ const PostForm: React.FC<PostFormProps> = ({
       });
 
       setGeneratedContent(generated);
+      addLogEntry("INFO", "AI draft generation completed", { generated });
+
+      toast({
+        title: "AI生成完了",
+        description: "プラットフォーム別のコンテンツが生成されました",
+      });
+    } catch (error) {
+      console.error("AI draft generation failed:", error);
+      addLogEntry("ERROR", "AI draft generation failed", error);
+      toast({
+        title: "AI生成エラー",
+        description: "コンテンツの生成に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
       setIsGeneratingDraft(false);
-    }, 2000);
+    }
   };
 
   const handleFormSubmit = async () => {
@@ -202,15 +231,48 @@ const PostForm: React.FC<PostFormProps> = ({
 
     if (initData.id) {
       postData.id = initData.id;
+    } else {
+      postData.id = Date.now().toString();
     }
 
-    // Simulate Google Sheets write
+    addLogEntry("INFO", "Submitting post", postData);
+
     try {
-      // Here you would integrate with Google Sheets API
-      console.log("Writing to Google Sheets:", postData);
+      // Add to Google Sheets if not editing
+      if (!isEditing) {
+        const sheetResult = await addPostToGoogleSheet(postData);
+        if (!sheetResult.success) {
+          addLogEntry(
+            "ERROR",
+            "Failed to add post to Google Sheet",
+            sheetResult,
+          );
+          toast({
+            title: "Google Sheetエラー",
+            description: `投稿の保存に失敗しました: ${sheetResult.error}`,
+            variant: "destructive",
+          });
+          return;
+        }
+        addLogEntry("INFO", "Post added to Google Sheet successfully");
+      }
+
       onSubmit(postData);
+
+      toast({
+        title: isEditing ? "投稿更新完了" : "投稿作成完了",
+        description: isEditing
+          ? "投稿が正常に更新されました"
+          : "投稿が正常に作成されました",
+      });
     } catch (error) {
-      console.error("Failed to write to Google Sheets:", error);
+      console.error("Failed to submit post:", error);
+      addLogEntry("ERROR", "Failed to submit post", error);
+      toast({
+        title: "投稿エラー",
+        description: "投稿の処理に失敗しました",
+        variant: "destructive",
+      });
     }
   };
 

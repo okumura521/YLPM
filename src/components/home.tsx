@@ -3,7 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { PlusIcon, RefreshCcwIcon, Settings, LogOut } from "lucide-react";
+import {
+  PlusIcon,
+  RefreshCcwIcon,
+  Settings,
+  LogOut,
+  FileText,
+  Trash2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import PostTable from "./PostTable";
 import {
@@ -18,8 +25,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AlertTriangle } from "lucide-react";
 import PostForm from "./PostForm";
-import { supabase } from "@/lib/supabase";
+import {
+  supabase,
+  checkGoogleSheetExists,
+  getUserSettings,
+  addLogEntry,
+  getApplicationLogs,
+  clearLogs,
+} from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 
 interface Post {
@@ -68,6 +83,9 @@ const Home = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentPost, setCurrentPost] = useState<Post | null>(null);
+  const [isLogsDialogOpen, setIsLogsDialogOpen] = useState(false);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [sheetError, setSheetError] = useState<string>("");
 
   // Simulate fetching posts from Google Sheets
   const fetchPosts = () => {
@@ -88,6 +106,8 @@ const Home = () => {
         const testUser = localStorage.getItem("testUser");
         if (testUser) {
           setUser(JSON.parse(testUser));
+          // Check Google Sheet existence for test user too
+          await checkSheetExistence();
           return;
         }
 
@@ -104,13 +124,16 @@ const Home = () => {
               navigate("/login", { replace: true });
             } else {
               setUser(retryUser);
+              await checkSheetExistence();
             }
           }, 500);
         } else {
           setUser(user);
+          await checkSheetExistence();
         }
       } catch (error) {
         console.error("Authentication check failed:", error);
+        addLogEntry("ERROR", "Authentication check failed", error);
         navigate("/login", { replace: true });
       }
     };
@@ -132,6 +155,36 @@ const Home = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  // Check Google Sheet existence
+  const checkSheetExistence = async () => {
+    try {
+      const settings = await getUserSettings();
+      if (settings?.google_sheet_url) {
+        addLogEntry("INFO", "Checking Google Sheet existence", {
+          url: settings.google_sheet_url,
+        });
+        const result = await checkGoogleSheetExists(settings.google_sheet_url);
+        if (!result.exists) {
+          const errorMsg =
+            "sheetが確認できないので、再度作成するか、googleDriveを確認してください";
+          setSheetError(errorMsg);
+          addLogEntry("ERROR", "Google Sheet not found", result);
+          toast({
+            title: "Google Sheetエラー",
+            description: errorMsg,
+            variant: "destructive",
+          });
+        } else {
+          setSheetError("");
+          addLogEntry("INFO", "Google Sheet exists and is accessible");
+        }
+      }
+    } catch (error) {
+      console.error("Error checking sheet existence:", error);
+      addLogEntry("ERROR", "Error checking sheet existence", error);
+    }
+  };
+
   const handleCreatePost = (post: Omit<Post, "id" | "updatedAt">) => {
     const newPost: Post = {
       ...post,
@@ -152,9 +205,21 @@ const Home = () => {
     setPosts(posts.filter((post) => post.id !== id));
   };
 
-  const handleEditClick = (post: Post) => {
-    setCurrentPost(post);
-    setIsEditDialogOpen(true);
+  const handleEditClick = (postId: string) => {
+    const post = posts.find((p) => p.id === postId);
+    if (post) {
+      // Convert the post data to match PostForm expectations
+      const postForEdit = {
+        ...post,
+        platforms: post.channels || [],
+        scheduleTime: post.scheduleTime
+          ? new Date(post.scheduleTime)
+          : undefined,
+        isScheduled: !!post.scheduleTime,
+      };
+      setCurrentPost(postForEdit);
+      setIsEditDialogOpen(true);
+    }
   };
 
   const handleRefresh = () => {
@@ -186,6 +251,21 @@ const Home = () => {
     navigate("/settings");
   };
 
+  const handleShowLogs = () => {
+    const currentLogs = getApplicationLogs();
+    setLogs(currentLogs);
+    setIsLogsDialogOpen(true);
+  };
+
+  const handleClearLogs = () => {
+    clearLogs();
+    setLogs([]);
+    toast({
+      title: "ログクリア",
+      description: "ログが削除されました",
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <header className="flex justify-between items-center mb-8">
@@ -207,6 +287,14 @@ const Home = () => {
           >
             <PlusIcon size={16} />
             新規投稿作成
+          </Button>
+          <Button
+            onClick={handleShowLogs}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <FileText size={16} />
+            ログ確認
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -234,6 +322,17 @@ const Home = () => {
           </DropdownMenu>
         </div>
       </header>
+
+      {sheetError && (
+        <Card className="mb-6 border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-red-800">
+              <AlertTriangle className="h-5 w-5" />
+              <p className="font-medium">{sheetError}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -269,7 +368,7 @@ const Home = () => {
           </div>
           <PostTable
             posts={posts}
-            onEdit={handleEditClick}
+            onEdit={(postId) => handleEditClick(postId)}
             onDelete={handleDeletePost}
           />
         </CardContent>
@@ -296,11 +395,69 @@ const Home = () => {
           </DialogHeader>
           {currentPost && (
             <PostForm
-              post={currentPost}
+              initialData={currentPost}
+              isEditing={true}
               onSubmit={handleEditPost}
               onCancel={() => setIsEditDialogOpen(false)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Logs Dialog */}
+      <Dialog open={isLogsDialogOpen} onOpenChange={setIsLogsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>アプリケーションログ</span>
+              <Button
+                onClick={handleClearLogs}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <Trash2 size={16} />
+                ログクリア
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {logs.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">
+                ログがありません
+              </p>
+            ) : (
+              logs.map((log, index) => (
+                <div
+                  key={index}
+                  className={`p-3 rounded-md border text-sm ${
+                    log.type === "ERROR"
+                      ? "bg-red-50 border-red-200"
+                      : log.type === "INFO"
+                        ? "bg-blue-50 border-blue-200"
+                        : "bg-gray-50 border-gray-200"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <Badge
+                      variant={log.type === "ERROR" ? "destructive" : "outline"}
+                    >
+                      {log.type}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="font-medium">{log.message}</p>
+                  {log.data && (
+                    <pre className="mt-2 text-xs bg-white p-2 rounded border overflow-x-auto">
+                      {log.data}
+                    </pre>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
