@@ -58,11 +58,18 @@ export default function DashboardPage() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div>
-              <h1 className="text-xl font-semibold">YLPM Dashboard</h1>
-              <p className="text-sm text-muted-foreground">
-                SNS投稿管理システム
-              </p>
+            <div className="flex items-center gap-3">
+              <img
+                src="https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=40&h=40&fit=crop&crop=center"
+                alt="YLPM Logo"
+                className="w-10 h-10 rounded-lg"
+              />
+              <div>
+                <h1 className="text-xl font-semibold">YLPM Dashboard</h1>
+                <p className="text-sm text-muted-foreground">
+                  SNS投稿管理システム
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <span className="text-sm text-muted-foreground">

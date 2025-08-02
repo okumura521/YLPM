@@ -1,7 +1,14 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
-import { Calendar, Clock, Send, Sparkles } from "lucide-react";
+import {
+  Calendar,
+  Clock,
+  Send,
+  Sparkles,
+  Image,
+  AlertTriangle,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +39,8 @@ import PlatformSelector from "./PlatformSelector";
 interface PostFormProps {
   initialData?: PostData;
   onSubmit?: (data: PostData) => void;
+  onCancel?: () => void;
+  post?: any;
   isEditing?: boolean;
 }
 
@@ -40,29 +49,45 @@ interface PostData {
   content: string;
   scheduleTime?: Date;
   platforms: string[];
+  channels?: string[];
   isScheduled: boolean;
+  image?: File | null;
+  status?: string;
 }
 
 const PostForm: React.FC<PostFormProps> = ({
-  initialData = {
-    content: "",
-    platforms: [],
-    isScheduled: false,
-  },
+  initialData,
+  post,
   onSubmit = () => {},
+  onCancel = () => {},
   isEditing = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<string>("manual");
-  const [content, setContent] = useState<string>(initialData.content);
+  // Initialize from post prop or initialData or defaults
+  const initData = post ||
+    initialData || {
+      content: "",
+      platforms: [],
+      channels: [],
+      isScheduled: false,
+    };
+
+  const [activeTab, setActiveTab] = useState<string>("ai");
+  const [content, setContent] = useState<string>(initData.content || "");
+  const [aiPrompt, setAiPrompt] = useState<string>("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(
-    initialData.platforms,
+    initData.platforms || initData.channels || [],
   );
   const [isScheduled, setIsScheduled] = useState<boolean>(
-    initialData.isScheduled,
+    initData.isScheduled || false,
   );
   const [scheduleDate, setScheduleDate] = useState<string>("");
   const [scheduleTime, setScheduleTime] = useState<string>("");
   const [isGeneratingDraft, setIsGeneratingDraft] = useState<boolean>(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [generatedContent, setGeneratedContent] = useState<
+    Record<string, string>
+  >({});
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string[]>
   >({});
@@ -77,24 +102,25 @@ const PostForm: React.FC<PostFormProps> = ({
 
   // Platform-specific validation rules
   const platformValidations = {
-    X: { maxLength: 280 },
-    Instagram: { maxLength: 2200 },
-    Facebook: { maxLength: 63206 },
-    LINE: { maxLength: 1000 },
-    Discord: { maxLength: 2000 },
-    WordPress: { maxLength: 100000 },
+    x: { maxLength: 280, name: "X (Twitter)" },
+    instagram: { maxLength: 2200, name: "Instagram" },
+    facebook: { maxLength: 63206, name: "Facebook" },
+    line: { maxLength: 1000, name: "LINE" },
+    discord: { maxLength: 2000, name: "Discord" },
+    wordpress: { maxLength: 100000, name: "WordPress" },
   };
 
-  const validateContent = () => {
+  const validateContent = (textToValidate?: string) => {
     const errors: Record<string, string[]> = {};
+    const contentToCheck = textToValidate || content;
 
     selectedPlatforms.forEach((platform) => {
       const validation =
         platformValidations[platform as keyof typeof platformValidations];
-      if (validation && content.length > validation.maxLength) {
+      if (validation && contentToCheck.length > validation.maxLength) {
         if (!errors[platform]) errors[platform] = [];
         errors[platform].push(
-          `Content exceeds maximum length of ${validation.maxLength} characters`,
+          `TargetPlatforms「${validation.name}」の文字数を超えています。`,
         );
       }
     });
@@ -103,18 +129,60 @@ const PostForm: React.FC<PostFormProps> = ({
     return Object.keys(errors).length === 0;
   };
 
-  const generateAIDraft = async () => {
-    setIsGeneratingDraft(true);
-    // Simulate AI draft generation
-    setTimeout(() => {
-      setContent(
-        "This is an AI-generated draft for your social media post. You can edit this text to customize it for your needs.",
-      );
-      setIsGeneratingDraft(false);
-    }, 1500);
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const handleFormSubmit = () => {
+  const generateAIDraft = async () => {
+    if (!content || !aiPrompt || selectedPlatforms.length === 0) {
+      return;
+    }
+
+    setIsGeneratingDraft(true);
+    // Simulate AI draft generation for each platform
+    setTimeout(() => {
+      const generated: Record<string, string> = {};
+
+      selectedPlatforms.forEach((platform) => {
+        const validation =
+          platformValidations[platform as keyof typeof platformValidations];
+        if (validation) {
+          // Generate platform-specific content based on character limits
+          let platformContent = content;
+          if (aiPrompt.includes("短く") || aiPrompt.includes("要約")) {
+            platformContent = content.substring(
+              0,
+              Math.min(validation.maxLength * 0.8, content.length),
+            );
+          } else if (aiPrompt.includes("詳しく") || aiPrompt.includes("詳細")) {
+            platformContent =
+              content + "\n\n詳細はプロフィールリンクから確認してください。";
+          }
+
+          // Ensure it fits within platform limits
+          if (platformContent.length > validation.maxLength) {
+            platformContent =
+              platformContent.substring(0, validation.maxLength - 3) + "...";
+          }
+
+          generated[platform] = platformContent;
+        }
+      });
+
+      setGeneratedContent(generated);
+      setIsGeneratingDraft(false);
+    }, 2000);
+  };
+
+  const handleFormSubmit = async () => {
     if (!validateContent()) return;
 
     let scheduledDateTime: Date | undefined;
@@ -125,213 +193,327 @@ const PostForm: React.FC<PostFormProps> = ({
     const postData: PostData = {
       content,
       platforms: selectedPlatforms,
+      channels: selectedPlatforms, // For compatibility
       isScheduled,
       scheduleTime: scheduledDateTime,
+      image: selectedImage,
+      status: "pending",
     };
 
-    if (initialData.id) {
-      postData.id = initialData.id;
+    if (initData.id) {
+      postData.id = initData.id;
     }
 
-    onSubmit(postData);
+    // Simulate Google Sheets write
+    try {
+      // Here you would integrate with Google Sheets API
+      console.log("Writing to Google Sheets:", postData);
+      onSubmit(postData);
+    } catch (error) {
+      console.error("Failed to write to Google Sheets:", error);
+    }
   };
+
+  // Validate content on change for Manual Entry tab
+  React.useEffect(() => {
+    if (activeTab === "manual") {
+      validateContent();
+    }
+  }, [content, selectedPlatforms, activeTab]);
 
   const hasValidationErrors = Object.keys(validationErrors).length > 0;
 
   return (
-    <Card className="w-full max-w-4xl mx-auto bg-white">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold">
-          {isEditing ? "Edit Post" : "Create New Post"}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit(handleFormSubmit)}>
-          <div className="space-y-6">
-            <Tabs
-              defaultValue="manual"
-              value={activeTab}
-              onValueChange={setActiveTab}
-            >
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="manual">Manual Entry</TabsTrigger>
-                <TabsTrigger value="ai">AI Assistance</TabsTrigger>
-              </TabsList>
-              <TabsContent value="manual" className="pt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="content">Post Content</Label>
-                  <Textarea
-                    id="content"
-                    placeholder="Enter your post content here..."
-                    className="min-h-[200px]"
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                  />
-                </div>
-              </TabsContent>
-              <TabsContent value="ai" className="pt-4">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor="ai-prompt">AI Prompt</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={generateAIDraft}
-                      disabled={isGeneratingDraft}
-                    >
-                      {isGeneratingDraft ? (
-                        <>
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{
-                              duration: 1,
-                              repeat: Infinity,
-                              ease: "linear",
-                            }}
-                            className="mr-2"
-                          >
-                            <Clock size={16} />
-                          </motion.div>
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={16} className="mr-2" />
-                          Generate Draft
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  <Input
-                    id="ai-prompt"
-                    placeholder="Describe what you want to post about..."
-                    disabled={isGeneratingDraft}
-                  />
-                  <div className="space-y-2">
-                    <Label htmlFor="ai-content">Generated Content</Label>
-                    <Textarea
-                      id="ai-content"
-                      placeholder="AI-generated content will appear here..."
-                      className="min-h-[200px]"
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      disabled={isGeneratingDraft}
-                    />
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
+    <div className="w-full bg-white">
+      <div className="space-y-6">
+        <Tabs defaultValue="ai" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="ai">AI Assistance</TabsTrigger>
+            <TabsTrigger value="manual">Manual Entry</TabsTrigger>
+          </TabsList>
 
-            <div className="space-y-4">
-              <div>
+          <TabsContent value="ai" className="pt-4">
+            <div className="space-y-6">
+              {/* 1. Target Platforms Selection */}
+              <div className="space-y-4">
                 <Label className="text-base font-medium">
-                  Target Platforms
+                  1. Target Platforms を選択
                 </Label>
                 <PlatformSelector
                   selectedPlatforms={selectedPlatforms}
-                  onSelectionChange={setSelectedPlatforms}
+                  onChange={setSelectedPlatforms}
                 />
               </div>
 
-              {selectedPlatforms.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {selectedPlatforms.map((platform) => (
-                    <TooltipProvider key={platform}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            variant={
-                              validationErrors[platform]
-                                ? "destructive"
-                                : "default"
-                            }
-                            className="cursor-default"
-                          >
-                            {platform}
-                          </Badge>
-                        </TooltipTrigger>
-                        {validationErrors[platform] && (
-                          <TooltipContent>
-                            <ul className="list-disc pl-4">
-                              {validationErrors[platform].map((error, i) => (
-                                <li key={i}>{error}</li>
-                              ))}
-                            </ul>
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    </TooltipProvider>
-                  ))}
+              {/* 2. Content Form */}
+              <div className="space-y-2">
+                <Label htmlFor="content">2. 投稿内容</Label>
+                <Textarea
+                  id="content"
+                  placeholder="投稿したい内容を入力してください..."
+                  className="min-h-[120px]"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                />
+              </div>
+
+              {/* 3. AI Prompt */}
+              <div className="space-y-2">
+                <Label htmlFor="ai-prompt">3. AI への指示</Label>
+                <Input
+                  id="ai-prompt"
+                  placeholder="どのように編集して欲しいか指示を入力（例：短くまとめて、詳しく説明して）"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                />
+              </div>
+
+              {/* 4. Select Image */}
+              <div className="space-y-2">
+                <Label htmlFor="image-select">4. 画像を選択</Label>
+                <div className="flex items-center gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      document.getElementById("image-input")?.click()
+                    }
+                  >
+                    <Image className="mr-2 h-4 w-4" />
+                    Select Image
+                  </Button>
+                  <input
+                    id="image-input"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                  {selectedImage && (
+                    <span className="text-sm text-muted-foreground">
+                      {selectedImage.name}
+                    </span>
+                  )}
                 </div>
-              )}
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="schedule"
-                  checked={isScheduled}
-                  onCheckedChange={setIsScheduled}
-                />
-                <Label htmlFor="schedule">Schedule for later</Label>
+                {imagePreview && (
+                  <div className="mt-2">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="max-w-xs max-h-32 object-cover rounded-md"
+                    />
+                  </div>
+                )}
               </div>
 
-              {isScheduled && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="date">Date</Label>
-                    <div className="flex">
-                      <Calendar className="mr-2 h-4 w-4 opacity-50" />
-                      <Input
-                        id="date"
-                        type="date"
-                        value={scheduleDate}
-                        onChange={(e) => setScheduleDate(e.target.value)}
-                      />
-                    </div>
+              {/* 5. Generate Draft Button */}
+              <div className="space-y-4">
+                <Button
+                  type="button"
+                  onClick={generateAIDraft}
+                  disabled={
+                    isGeneratingDraft ||
+                    !content ||
+                    !aiPrompt ||
+                    selectedPlatforms.length === 0
+                  }
+                  className="w-full"
+                >
+                  {isGeneratingDraft ? (
+                    <>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 1,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                        className="mr-2"
+                      >
+                        <Clock size={16} />
+                      </motion.div>
+                      Generating Draft...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={16} className="mr-2" />
+                      5. Generate Draft
+                    </>
+                  )}
+                </Button>
+
+                {/* Generated Content Preview */}
+                {Object.keys(generatedContent).length > 0 && (
+                  <div className="space-y-4">
+                    <Label>プラットフォーム別生成コンテンツ</Label>
+                    {Object.entries(generatedContent).map(
+                      ([platform, platformContent]) => {
+                        const validation =
+                          platformValidations[
+                            platform as keyof typeof platformValidations
+                          ];
+                        return (
+                          <Card key={platform} className="p-4">
+                            <div className="flex justify-between items-center mb-2">
+                              <Badge variant="outline">
+                                {validation?.name || platform}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {platformContent.length}/{validation?.maxLength}{" "}
+                                文字
+                              </span>
+                            </div>
+                            <p className="text-sm">{platformContent}</p>
+                          </Card>
+                        );
+                      },
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="time">Time</Label>
-                    <div className="flex">
-                      <Clock className="mr-2 h-4 w-4 opacity-50" />
-                      <Input
-                        id="time"
-                        type="time"
-                        value={scheduleTime}
-                        onChange={(e) => setScheduleTime(e.target.value)}
-                      />
-                    </div>
+                )}
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="manual" className="pt-4">
+            <div className="space-y-6">
+              {/* 1. Target Platforms Selection */}
+              <div className="space-y-4">
+                <Label className="text-base font-medium">
+                  1. Target Platforms を選択
+                </Label>
+                <PlatformSelector
+                  selectedPlatforms={selectedPlatforms}
+                  onChange={setSelectedPlatforms}
+                />
+              </div>
+
+              {/* 2. Content Form */}
+              <div className="space-y-2">
+                <Label htmlFor="manual-content">2. 投稿内容</Label>
+                <Textarea
+                  id="manual-content"
+                  placeholder="投稿内容を入力してください..."
+                  className="min-h-[200px]"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                />
+              </div>
+
+              {/* 3. Select Image */}
+              <div className="space-y-2">
+                <Label htmlFor="manual-image-select">3. 画像を選択</Label>
+                <div className="flex items-center gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      document.getElementById("manual-image-input")?.click()
+                    }
+                  >
+                    <Image className="mr-2 h-4 w-4" />
+                    Select Image
+                  </Button>
+                  <input
+                    id="manual-image-input"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                  {selectedImage && (
+                    <span className="text-sm text-muted-foreground">
+                      {selectedImage.name}
+                    </span>
+                  )}
+                </div>
+                {imagePreview && (
+                  <div className="mt-2">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="max-w-xs max-h-32 object-cover rounded-md"
+                    />
                   </div>
+                )}
+              </div>
+
+              {/* Validation Alerts */}
+              {hasValidationErrors && (
+                <div className="space-y-2">
+                  {Object.entries(validationErrors).map(
+                    ([platform, errors]) => (
+                      <Alert key={platform} variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>{errors.join(", ")}</AlertDescription>
+                      </Alert>
+                    ),
+                  )}
                 </div>
               )}
             </div>
+          </TabsContent>
+        </Tabs>
 
-            {hasValidationErrors && (
-              <Alert variant="destructive" className="mt-4">
-                <AlertDescription>
-                  Please fix the validation errors before submitting.
-                </AlertDescription>
-              </Alert>
-            )}
+        {/* Schedule Settings */}
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="schedule"
+              checked={isScheduled}
+              onCheckedChange={setIsScheduled}
+            />
+            <Label htmlFor="schedule">スケジュール投稿</Label>
           </div>
-        </form>
-      </CardContent>
-      <CardFooter className="flex justify-between border-t pt-6">
-        <Button variant="outline" type="button">
-          Cancel
-        </Button>
-        <Button
-          onClick={handleFormSubmit}
-          disabled={
-            hasValidationErrors ||
-            selectedPlatforms.length === 0 ||
-            !content.trim()
-          }
-        >
-          <Send className="mr-2 h-4 w-4" />
-          {isScheduled ? "Schedule Post" : "Post Now"}
-        </Button>
-      </CardFooter>
-    </Card>
+
+          {isScheduled && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="date">日付</Label>
+                <div className="flex">
+                  <Calendar className="mr-2 h-4 w-4 opacity-50" />
+                  <Input
+                    id="date"
+                    type="date"
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="time">時刻</Label>
+                <div className="flex">
+                  <Clock className="mr-2 h-4 w-4 opacity-50" />
+                  <Input
+                    id="time"
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex justify-between pt-6">
+          <Button variant="outline" type="button" onClick={onCancel}>
+            キャンセル
+          </Button>
+          <Button
+            onClick={handleFormSubmit}
+            disabled={
+              hasValidationErrors ||
+              selectedPlatforms.length === 0 ||
+              !content.trim()
+            }
+          >
+            <Send className="mr-2 h-4 w-4" />
+            {isScheduled ? "スケジュール投稿" : "今すぐ投稿"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 };
 

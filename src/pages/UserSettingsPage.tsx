@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,12 +19,19 @@ import {
 } from "@/components/ui/select";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import {
+  Loader2,
+  CheckCircle,
+  XCircle,
+  X,
+  FileSpreadsheet,
+} from "lucide-react";
 import {
   saveUserSettings,
   getUserSettings,
   testGoogleConnection,
   testAIConnection,
+  createGoogleSheet,
 } from "@/lib/supabase";
 
 const AI_MODELS = {
@@ -41,6 +49,8 @@ export default function UserSettingsPage() {
   const [loading, setLoading] = useState(false);
   const [googleTesting, setGoogleTesting] = useState(false);
   const [aiTesting, setAiTesting] = useState(false);
+  const [creatingSheet, setCreatingSheet] = useState(false);
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   // Google settings
@@ -197,14 +207,67 @@ export default function UserSettingsPage() {
     }
   };
 
+  const handleCreateGoogleSheet = async () => {
+    if (!googleConnectionStatus) {
+      toast({
+        title: "接続エラー",
+        description: "Google連携設定を完了してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCreatingSheet(true);
+    try {
+      const result = await createGoogleSheet();
+      if (result.success) {
+        toast({
+          title: "作成完了",
+          description: "Google Sheetが正常に作成されました",
+        });
+      } else {
+        toast({
+          title: "作成エラー",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "作成エラー",
+        description: "Google Sheetの作成に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingSheet(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold">ユーザー設定</h1>
-          <p className="text-muted-foreground mt-2">
-            Google連携とAI連携の設定を行います
-          </p>
+        <div className="flex justify-between items-center">
+          <div className="text-center flex-1">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <img
+                src="https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=48&h=48&fit=crop&crop=center"
+                alt="YLPM Logo"
+                className="w-12 h-12 rounded-lg"
+              />
+              <h1 className="text-3xl font-bold">ユーザー設定</h1>
+            </div>
+            <p className="text-muted-foreground mt-2">
+              Google連携とAI連携の設定を行います
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => navigate("/")}
+            className="ml-4"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Google Settings */}
@@ -331,6 +394,35 @@ export default function UserSettingsPage() {
               {aiTesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               接続確認
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* Google Sheet Creation */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Google Sheet 作成</CardTitle>
+            <CardDescription>
+              SNS投稿管理用のGoogle Sheetを作成します
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={handleCreateGoogleSheet}
+              disabled={creatingSheet || !googleConnectionStatus}
+              className="w-full"
+              size="lg"
+            >
+              {creatingSheet && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Google Sheet を作成
+            </Button>
+            {!googleConnectionStatus && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Google連携設定を完了してからご利用ください
+              </p>
+            )}
           </CardContent>
         </Card>
 

@@ -25,6 +25,7 @@ export interface PlatformSelectorProps {
   platforms?: Platform[];
   selectedPlatforms?: string[];
   onChange?: (selectedPlatforms: string[]) => void;
+  onSelectionChange?: (selectedPlatforms: string[]) => void;
   disabled?: boolean;
 }
 
@@ -89,6 +90,7 @@ const PlatformSelector: React.FC<PlatformSelectorProps> = ({
   platforms = defaultPlatforms,
   selectedPlatforms = [],
   onChange,
+  onSelectionChange,
   disabled = false,
 }) => {
   const handleTogglePlatform = (platformId: string) => {
@@ -99,6 +101,7 @@ const PlatformSelector: React.FC<PlatformSelectorProps> = ({
       : [...selectedPlatforms, platformId];
 
     onChange?.(newSelectedPlatforms);
+    onSelectionChange?.(newSelectedPlatforms);
   };
 
   return (

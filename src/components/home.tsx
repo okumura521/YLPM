@@ -172,9 +172,16 @@ const Home = () => {
   return (
     <div className="min-h-screen bg-background p-6">
       <header className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Yell-lab-PostMate</h1>
-          <p className="text-muted-foreground">SNS投稿作成＆管理システム</p>
+        <div className="flex items-center gap-4">
+          <img
+            src="https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=48&h=48&fit=crop&crop=center"
+            alt="YLPM Logo"
+            className="w-12 h-12 rounded-lg"
+          />
+          <div>
+            <h1 className="text-3xl font-bold">Yell-lab-PostMate</h1>
+            <p className="text-muted-foreground">SNS投稿作成＆管理システム</p>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <Button
