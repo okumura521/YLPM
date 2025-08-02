@@ -24,6 +24,13 @@ export default function LoginPage() {
   useEffect(() => {
     // Check if user is already logged in
     const checkUser = async () => {
+      // Check for test user first
+      const testUser = localStorage.getItem("testUser");
+      if (testUser) {
+        navigate("/", { replace: true });
+        return;
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -62,12 +69,27 @@ export default function LoginPage() {
     if (email === "admin" && password === "ylpm") {
       try {
         setLoading(true);
-        // Simulate successful login for test user
+        // Store test user session in localStorage
+        localStorage.setItem(
+          "testUser",
+          JSON.stringify({
+            id: "test-user-id",
+            email: "admin@ylpm.test",
+            user_metadata: {
+              full_name: "Test User",
+              avatar_url:
+                "https://api.dicebear.com/7.x/avataaars/svg?seed=admin",
+            },
+            created_at: new Date().toISOString(),
+          }),
+        );
+
         toast({
           title: "ログイン成功",
           description: "テストユーザーでログインしました",
         });
-        // Navigate directly to home page
+
+        // Navigate to home page
         navigate("/", { replace: true });
         return;
       } catch (error) {

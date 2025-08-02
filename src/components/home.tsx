@@ -84,6 +84,13 @@ const Home = () => {
     // Check authentication status with retry logic
     const getUser = async () => {
       try {
+        // Check for test user first
+        const testUser = localStorage.getItem("testUser");
+        if (testUser) {
+          setUser(JSON.parse(testUser));
+          return;
+        }
+
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -114,6 +121,8 @@ const Home = () => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT") {
+        // Clear test user session
+        localStorage.removeItem("testUser");
         navigate("/login", { replace: true });
       } else if (event === "SIGNED_IN" && session?.user) {
         setUser(session.user);
@@ -154,6 +163,14 @@ const Home = () => {
 
   const handleLogout = async () => {
     try {
+      // Check if it's a test user
+      const testUser = localStorage.getItem("testUser");
+      if (testUser) {
+        localStorage.removeItem("testUser");
+        navigate("/login");
+        return;
+      }
+
       await supabase.auth.signOut();
       navigate("/login");
     } catch (error) {
