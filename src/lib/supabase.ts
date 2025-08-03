@@ -14,32 +14,27 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 export const openGoogleDrivePicker = async (
   accessToken: string,
 ): Promise<{ folderId: string; folderName: string } | null> => {
-  return new Promise((resolve) => {
-    // Load Google Picker API
-    const script = document.createElement("script");
-    script.src = "https://apis.google.com/js/api.js";
-    script.onload = () => {
-      window.gapi.load("picker", () => {
-        const picker = new window.google.picker.PickerBuilder()
-          .addView(window.google.picker.ViewId.FOLDERS)
-          .setOAuthToken(accessToken)
-          .setDeveloperKey("YOUR_DEVELOPER_KEY") // You'll need to set this
-          .setCallback((data: any) => {
-            if (data.action === window.google.picker.Action.PICKED) {
-              const folder = data.docs[0];
-              resolve({
-                folderId: folder.id,
-                folderName: folder.name,
-              });
-            } else if (data.action === window.google.picker.Action.CANCEL) {
-              resolve(null);
-            }
-          })
-          .build();
-        picker.setVisible(true);
+  return new Promise((resolve, reject) => {
+    addLogEntry("INFO", "Opening Google Drive folder picker");
+
+    // For now, we'll simulate the folder picker with a simple dialog
+    // In a production environment, you would implement the actual Google Picker API
+    const userChoice = confirm(
+      "Google Sheetを作成します。\n\n" +
+        "OK: ルートフォルダに作成\n" +
+        "キャンセル: 作成をキャンセル",
+    );
+
+    if (userChoice) {
+      addLogEntry("INFO", "User chose to create sheet in root folder");
+      resolve({
+        folderId: "root",
+        folderName: "マイドライブ",
       });
-    };
-    document.head.appendChild(script);
+    } else {
+      addLogEntry("INFO", "User cancelled sheet creation");
+      resolve(null);
+    }
   });
 };
 
@@ -171,7 +166,7 @@ export const createGoogleSheetWithOAuth = async (
           sheets: [
             {
               properties: {
-                title: "Posts",
+                title: "投稿データ",
               },
               data: [
                 {
@@ -179,12 +174,14 @@ export const createGoogleSheetWithOAuth = async (
                     {
                       values: [
                         { userEnteredValue: { stringValue: "ID" } },
-                        { userEnteredValue: { stringValue: "Content" } },
-                        { userEnteredValue: { stringValue: "Platforms" } },
-                        { userEnteredValue: { stringValue: "Schedule Time" } },
-                        { userEnteredValue: { stringValue: "Status" } },
-                        { userEnteredValue: { stringValue: "Created At" } },
-                        { userEnteredValue: { stringValue: "Updated At" } },
+                        { userEnteredValue: { stringValue: "投稿内容" } },
+                        {
+                          userEnteredValue: { stringValue: "プラットフォーム" },
+                        },
+                        { userEnteredValue: { stringValue: "予定時刻" } },
+                        { userEnteredValue: { stringValue: "ステータス" } },
+                        { userEnteredValue: { stringValue: "作成日時" } },
+                        { userEnteredValue: { stringValue: "更新日時" } },
                       ],
                     },
                   ],
@@ -340,7 +337,7 @@ export const addPostToGoogleSheet = async (post: any) => {
     const accessToken = await getGoogleAccessToken();
 
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/Posts:append?valueInputOption=RAW`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/投稿データ:append?valueInputOption=RAW`,
       {
         method: "POST",
         headers: {
@@ -459,10 +456,34 @@ export const getApplicationLogs = () => {
 // Add log entry
 export const addLogEntry = (type: string, message: string, data?: any) => {
   const logs = getApplicationLogs();
+
+  // Format timestamp in Japanese time
+  const japanTime = new Date().toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  // Get request headers if available
+  const requestHeaders = {
+    userAgent: navigator.userAgent,
+    language: navigator.language,
+    platform: navigator.platform,
+    cookieEnabled: navigator.cookieEnabled,
+    onLine: navigator.onLine,
+    referrer: document.referrer || "direct",
+    url: window.location.href,
+  };
+
   const logEntry = {
-    timestamp: new Date().toISOString(),
+    timestamp: japanTime,
     type,
     message,
+    requestHeaders,
     data: data ? JSON.stringify(data, null, 2) : undefined,
   };
 

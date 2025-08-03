@@ -166,23 +166,88 @@ const Home = () => {
         return;
       }
 
-      const result = await handleGoogleSheetCreationFlow();
-      if (result.success) {
-        if (result.skipped) {
-          addLogEntry("INFO", "Google Sheet already exists, skipped creation");
+      addLogEntry("INFO", "Starting Google Sheet creation flow on login");
+
+      // Check if user already has a Google Sheet
+      const settings = await getUserSettings();
+      if (settings?.google_sheet_url) {
+        addLogEntry(
+          "INFO",
+          "User already has Google Sheet, checking existence",
+          {
+            url: settings.google_sheet_url,
+          },
+        );
+        const existsResult = await checkGoogleSheetExists(
+          settings.google_sheet_url,
+        );
+        if (existsResult.exists) {
+          addLogEntry("INFO", "Google Sheet exists, skipping creation");
           setSheetError("");
+          return;
         } else {
-          addLogEntry("INFO", "Google Sheet created successfully on login");
+          addLogEntry(
+            "WARN",
+            "Google Sheet not found, will show creation flow",
+            existsResult,
+          );
+        }
+      }
+
+      // Show Google Drive folder picker and create sheet
+      try {
+        const accessToken = await getGoogleAccessToken();
+
+        // Show folder picker dialog
+        const folderResult = await openGoogleDrivePicker(accessToken);
+
+        let folderId = undefined;
+        if (folderResult) {
+          folderId = folderResult.folderId;
+          addLogEntry(
+            "INFO",
+            "User selected Google Drive folder",
+            folderResult,
+          );
+          toast({
+            title: "フォルダ選択完了",
+            description: `選択されたフォルダ: ${folderResult.folderName}`,
+          });
+        } else {
+          addLogEntry(
+            "INFO",
+            "User cancelled folder selection, creating in root",
+          );
+        }
+
+        // Create the Google Sheet
+        const result = await createGoogleSheetWithOAuth(accessToken, folderId);
+
+        if (result.success) {
+          addLogEntry(
+            "INFO",
+            "Google Sheet created successfully on login",
+            result,
+          );
           setSheetError("");
           toast({
             title: "Google Sheet作成完了",
             description: "SNS投稿管理用のGoogle Sheetが作成されました",
           });
+        } else {
+          const errorMsg = `Google Sheetの作成に失敗しました: ${result.message}`;
+          setSheetError(errorMsg);
+          addLogEntry("ERROR", "Google Sheet creation failed on login", result);
+          toast({
+            title: "Google Sheetエラー",
+            description: errorMsg,
+            variant: "destructive",
+          });
         }
-      } else {
-        const errorMsg = `Google Sheetの作成に失敗しました: ${result.error}`;
+      } catch (error) {
+        const errorMsg = `Google Sheetの作成に失敗しました: ${error instanceof Error ? error.message : "Unknown error"}`;
         setSheetError(errorMsg);
-        addLogEntry("ERROR", "Google Sheet creation failed on login", result);
+        addLogEntry("ERROR", "Error in Google Sheet creation flow", error);
         toast({
           title: "Google Sheetエラー",
           description: errorMsg,
