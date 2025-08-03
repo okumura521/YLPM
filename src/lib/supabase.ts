@@ -408,6 +408,60 @@ export const addPostToGoogleSheet = async (post: any) => {
   }
 };
 
+// Fetch posts from Google Sheet
+export const fetchPostsFromGoogleSheet = async () => {
+  try {
+    const settings = await getUserSettings();
+    if (!settings?.google_sheet_id) {
+      addLogEntry("INFO", "No Google Sheet configured, returning empty array");
+      return [];
+    }
+
+    const accessToken = await getGoogleAccessToken();
+    const sheetName = encodeURIComponent("投稿データ");
+
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}?majorDimension=ROWS`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      addLogEntry("ERROR", "Error fetching posts from sheet", errorData);
+      throw new Error(
+        `Failed to fetch posts: ${errorData.error?.message || "Unknown error"}`,
+      );
+    }
+
+    const data = await response.json();
+    const rows = data.values || [];
+
+    // Skip header row and convert to post objects
+    const posts = rows.slice(1).map((row: string[], index: number) => ({
+      id: row[0] || `sheet-${index}`,
+      content: row[1] || "",
+      channels: row[2] ? row[2].split(", ").filter(Boolean) : [],
+      scheduleTime: row[3] || new Date().toISOString(),
+      status: (row[4] as "pending" | "sent" | "failed") || "pending",
+      updatedAt: row[6] || row[5] || new Date().toISOString(),
+    }));
+
+    addLogEntry("INFO", "Posts fetched from Google Sheet successfully", {
+      count: posts.length,
+    });
+
+    return posts;
+  } catch (error) {
+    console.error("Error fetching posts from Google Sheet:", error);
+    addLogEntry("ERROR", "Error fetching posts from Google Sheet", error);
+    return [];
+  }
+};
+
 // Google Sheet creation flow for login
 export const handleGoogleSheetCreationFlow = async () => {
   try {

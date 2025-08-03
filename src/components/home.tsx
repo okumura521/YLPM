@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,8 @@ import {
   getGoogleAccessToken,
   openGoogleDrivePicker,
   createGoogleSheetWithOAuth,
+  fetchPostsFromGoogleSheet,
+  addPostToGoogleSheet,
 } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -55,35 +57,7 @@ const Home = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [user, setUser] = useState<any>(null);
-  const [posts, setPosts] = useState<Post[]>([
-    {
-      id: "1",
-      content:
-        "エールラボえひめの新しいイベントが開催されます！詳細はプロフィールリンクから確認してください。",
-      scheduleTime: "2023-06-15T10:00:00",
-      channels: ["X", "Facebook", "Instagram"],
-      status: "sent",
-      updatedAt: "2023-06-15T10:01:23",
-    },
-    {
-      id: "2",
-      content:
-        "今週末のワークショップの参加者募集中です。興味のある方はDMでご連絡ください！",
-      scheduleTime: "2023-06-16T15:30:00",
-      channels: ["X", "LINE", "Discord"],
-      status: "pending",
-      updatedAt: "2023-06-14T09:45:12",
-    },
-    {
-      id: "3",
-      content: "先日のセミナーの様子をブログにまとめました。ぜひご覧ください。",
-      scheduleTime: "2023-06-14T18:00:00",
-      channels: ["WordPress", "Facebook"],
-      status: "failed",
-      updatedAt: "2023-06-14T18:01:05",
-    },
-  ]);
-
+  const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -91,23 +65,35 @@ const Home = () => {
   const [isLogsDialogOpen, setIsLogsDialogOpen] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [sheetError, setSheetError] = useState<string>("");
+  const sheetCreationHandled = useRef(false);
 
-  // Simulate fetching posts from Google Sheets
-  const fetchPosts = () => {
+  // Fetch posts from Google Sheets
+  const fetchPosts = async () => {
     setIsLoading(true);
-    // In a real implementation, this would be an API call to fetch data from Google Sheets
-    setTimeout(() => {
+    try {
+      const postsFromSheet = await fetchPostsFromGoogleSheet();
+      setPosts(postsFromSheet);
+      addLogEntry("INFO", "Posts fetched successfully", {
+        count: postsFromSheet.length,
+      });
+    } catch (error) {
+      console.error("Error fetching posts:", error);
+      addLogEntry("ERROR", "Error fetching posts", error);
+      toast({
+        title: "データ取得エラー",
+        description: "投稿データの取得に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   useEffect(() => {
     fetchPosts();
 
-    let sheetCreationExecuted = false;
-
-    // Check authentication status with retry logic
-    const getUser = async () => {
+    // Check initial authentication state
+    const checkInitialAuth = async () => {
       try {
         // Check for test user first
         const testUser = localStorage.getItem("testUser");
@@ -120,25 +106,15 @@ const Home = () => {
           data: { user },
         } = await supabase.auth.getUser();
         if (!user) {
-          // Wait a bit and try again in case the session is still being established
-          setTimeout(async () => {
-            const {
-              data: { user: retryUser },
-            } = await supabase.auth.getUser();
-            if (!retryUser) {
-              navigate("/login", { replace: true });
-            } else {
-              setUser(retryUser);
-              if (!sheetCreationExecuted) {
-                sheetCreationExecuted = true;
-                await handleSheetCreationOnLogin();
-              }
-            }
-          }, 500);
+          navigate("/login", { replace: true });
         } else {
           setUser(user);
-          if (!sheetCreationExecuted) {
-            sheetCreationExecuted = true;
+          // Handle sheet creation for Google OAuth users only once
+          if (
+            !sheetCreationHandled.current &&
+            user.app_metadata?.provider === "google"
+          ) {
+            sheetCreationHandled.current = true;
             await handleSheetCreationOnLogin();
           }
         }
@@ -148,19 +124,28 @@ const Home = () => {
         navigate("/login", { replace: true });
       }
     };
-    getUser();
+
+    checkInitialAuth();
 
     // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT") {
         // Clear test user session
         localStorage.removeItem("testUser");
+        sheetCreationHandled.current = false;
         navigate("/login", { replace: true });
       } else if (event === "SIGNED_IN" && session?.user) {
         setUser(session.user);
-        // Don't call handleSheetCreationOnLogin here to avoid duplication
+        // Handle sheet creation for Google OAuth users only once
+        if (
+          !sheetCreationHandled.current &&
+          session.user.app_metadata?.provider === "google"
+        ) {
+          sheetCreationHandled.current = true;
+          await handleSheetCreationOnLogin();
+        }
       }
     });
 
@@ -270,13 +255,41 @@ const Home = () => {
     }
   };
 
-  const handleCreatePost = (post: Omit<Post, "id" | "updatedAt">) => {
+  const handleCreatePost = async (post: Omit<Post, "id" | "updatedAt">) => {
     const newPost: Post = {
       ...post,
       id: Date.now().toString(),
       updatedAt: new Date().toISOString(),
     };
-    setPosts([newPost, ...posts]);
+
+    // Add to Google Sheet
+    try {
+      const result = await addPostToGoogleSheet({
+        ...newPost,
+        platforms: newPost.channels, // Convert channels to platforms for the API
+      });
+
+      if (result.success) {
+        // Refresh posts from Google Sheet
+        await fetchPosts();
+        toast({
+          title: "投稿作成完了",
+          description: "投稿がGoogle Sheetに保存されました",
+        });
+      } else {
+        throw new Error(result.error || "Failed to save post");
+      }
+    } catch (error) {
+      console.error("Error saving post:", error);
+      toast({
+        title: "投稿保存エラー",
+        description: "投稿の保存に失敗しました",
+        variant: "destructive",
+      });
+      // Still add to local state as fallback
+      setPosts([newPost, ...posts]);
+    }
+
     setIsCreateDialogOpen(false);
   };
 
@@ -307,8 +320,8 @@ const Home = () => {
     }
   };
 
-  const handleRefresh = () => {
-    fetchPosts();
+  const handleRefresh = async () => {
+    await fetchPosts();
   };
 
   const handleLogout = async () => {
