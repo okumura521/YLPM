@@ -29,9 +29,7 @@ import {
 import {
   saveUserSettings,
   getUserSettings,
-  testGoogleConnection,
   testAIConnection,
-  createGoogleSheet,
 } from "@/lib/supabase";
 
 const AI_MODELS = {
@@ -47,18 +45,9 @@ const AI_MODELS = {
 
 export default function UserSettingsPage() {
   const [loading, setLoading] = useState(false);
-  const [googleTesting, setGoogleTesting] = useState(false);
   const [aiTesting, setAiTesting] = useState(false);
-  const [creatingSheet, setCreatingSheet] = useState(false);
-  const [sheetUrl, setSheetUrl] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
-
-  // Google settings
-  const [googleClientId, setGoogleClientId] = useState("");
-  const [googleClientSecret, setGoogleClientSecret] = useState("");
-  const [googleRedirectUri, setGoogleRedirectUri] = useState("");
-  const [googleConnectionStatus, setGoogleConnectionStatus] = useState(false);
 
   // AI settings
   const [aiService, setAiService] = useState("");
@@ -67,7 +56,6 @@ export default function UserSettingsPage() {
   const [aiConnectionStatus, setAiConnectionStatus] = useState(false);
 
   // Sheet settings
-  const [googleSheetId, setGoogleSheetId] = useState("");
   const [googleSheetUrl, setGoogleSheetUrl] = useState("");
 
   // Load existing settings
@@ -76,11 +64,6 @@ export default function UserSettingsPage() {
       try {
         const settings = await getUserSettings();
         if (settings) {
-          setGoogleClientId(settings.google_client_id || "");
-          setGoogleClientSecret(settings.google_client_secret || "");
-          setGoogleRedirectUri(settings.google_redirect_uri || "");
-          setGoogleConnectionStatus(settings.google_connection_status || false);
-          setGoogleSheetId(settings.google_sheet_id || "");
           setGoogleSheetUrl(settings.google_sheet_url || "");
           setAiService(settings.ai_service || "");
           setAiModel(settings.ai_model || "");
@@ -101,22 +84,6 @@ export default function UserSettingsPage() {
     }
   }, [aiService]);
 
-  const validateGoogleForm = () => {
-    if (
-      !googleClientId.trim() ||
-      !googleClientSecret.trim() ||
-      !googleRedirectUri.trim()
-    ) {
-      toast({
-        title: "入力エラー",
-        description: "すべてのGoogle設定項目を入力してください",
-        variant: "destructive",
-      });
-      return false;
-    }
-    return true;
-  };
-
   const validateAiForm = () => {
     if (!aiService || !aiModel || !aiApiToken.trim()) {
       toast({
@@ -127,35 +94,6 @@ export default function UserSettingsPage() {
       return false;
     }
     return true;
-  };
-
-  const handleGoogleConnectionTest = async () => {
-    if (!validateGoogleForm()) return;
-
-    setGoogleTesting(true);
-    try {
-      const result = await testGoogleConnection(
-        googleClientId,
-        googleClientSecret,
-        googleRedirectUri,
-      );
-      setGoogleConnectionStatus(result.success);
-
-      toast({
-        title: result.success ? "接続成功" : "接続失敗",
-        description: result.message,
-        variant: result.success ? "default" : "destructive",
-      });
-    } catch (error) {
-      setGoogleConnectionStatus(false);
-      toast({
-        title: "接続エラー",
-        description: "接続テストに失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setGoogleTesting(false);
-    }
   };
 
   const handleAiConnectionTest = async () => {
@@ -184,17 +122,11 @@ export default function UserSettingsPage() {
   };
 
   const handleSaveSettings = async () => {
-    if (!validateGoogleForm() || !validateAiForm()) return;
+    if (!validateAiForm()) return;
 
     setLoading(true);
     try {
       await saveUserSettings({
-        googleClientId,
-        googleClientSecret,
-        googleRedirectUri,
-        googleConnectionStatus,
-        googleSheetId,
-        googleSheetUrl,
         aiService,
         aiModel,
         aiApiToken,
@@ -213,45 +145,6 @@ export default function UserSettingsPage() {
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCreateGoogleSheet = async () => {
-    if (!googleConnectionStatus) {
-      toast({
-        title: "接続エラー",
-        description: "Google連携設定を完了してください",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setCreatingSheet(true);
-    try {
-      const result = await createGoogleSheet();
-      if (result.success) {
-        setSheetUrl(result.sheetUrl || "");
-        setGoogleSheetId(result.sheetId || "");
-        setGoogleSheetUrl(result.sheetUrl || "");
-        toast({
-          title: "作成完了",
-          description: `Google Sheetが正常に作成されました`,
-        });
-      } else {
-        toast({
-          title: "作成エラー",
-          description: result.message,
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "作成エラー",
-        description: "Google Sheetの作成に失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setCreatingSheet(false);
     }
   };
 
@@ -282,61 +175,43 @@ export default function UserSettingsPage() {
           </Button>
         </div>
 
-        {/* Google Settings */}
+        {/* Google Sheet Information */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              Google連携設定
-              {googleConnectionStatus ? (
+              Google Sheet情報
+              {googleSheetUrl ? (
                 <CheckCircle className="h-5 w-5 text-green-500" />
               ) : (
                 <XCircle className="h-5 w-5 text-red-500" />
               )}
             </CardTitle>
-            <CardDescription>
-              Google Sheets API、Google Drive API の設定
-            </CardDescription>
+            <CardDescription>SNS投稿管理用のGoogle Sheet</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="google-client-id">クライアント ID</Label>
-              <PasswordInput
-                id="google-client-id"
-                value={googleClientId}
-                onChange={(e) => setGoogleClientId(e.target.value)}
-                placeholder="Google Client ID を入力"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="google-client-secret">
-                クライアントシークレット
-              </Label>
-              <PasswordInput
-                id="google-client-secret"
-                value={googleClientSecret}
-                onChange={(e) => setGoogleClientSecret(e.target.value)}
-                placeholder="Google Client Secret を入力"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="google-redirect-uri">リダイレクト URI</Label>
-              <Input
-                id="google-redirect-uri"
-                value={googleRedirectUri}
-                onChange={(e) => setGoogleRedirectUri(e.target.value)}
-                placeholder="https://example.com/callback"
-              />
-            </div>
-            <Button
-              onClick={handleGoogleConnectionTest}
-              disabled={googleTesting}
-              variant="outline"
-            >
-              {googleTesting && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              接続確認
-            </Button>
+            {googleSheetUrl ? (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm font-medium text-green-800 mb-2">
+                  Google Sheet URL:
+                </p>
+                <a
+                  href={googleSheetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {googleSheetUrl}
+                </a>
+              </div>
+            ) : (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  Google
+                  Sheetが設定されていません。Googleでログインすると自動的に作成されます。
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -406,50 +281,6 @@ export default function UserSettingsPage() {
               {aiTesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               接続確認
             </Button>
-          </CardContent>
-        </Card>
-
-        {/* Google Sheet Creation */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Google Sheet 作成</CardTitle>
-            <CardDescription>
-              SNS投稿管理用のGoogle Sheetを作成します
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button
-              onClick={handleCreateGoogleSheet}
-              disabled={creatingSheet || !googleConnectionStatus}
-              className="w-full"
-              size="lg"
-            >
-              {creatingSheet && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Google Sheet を作成
-            </Button>
-            {!googleConnectionStatus && (
-              <p className="text-sm text-muted-foreground">
-                Google連携設定を完了してからご利用ください
-              </p>
-            )}
-            {googleSheetUrl && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                <p className="text-sm font-medium text-green-800 mb-2">
-                  Google Sheet が作成されました:
-                </p>
-                <a
-                  href={googleSheetUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:text-blue-800 underline break-all"
-                >
-                  {googleSheetUrl}
-                </a>
-              </div>
-            )}
           </CardContent>
         </Card>
 

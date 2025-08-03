@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, CheckCircle, XCircle, FileSpreadsheet } from "lucide-react";
-import { getUserSettings, createGoogleSheet } from "@/lib/supabase";
+import { getUserSettings } from "@/lib/supabase";
 
 export default function GoogleSheetsCreationPage() {
   const [loading, setLoading] = useState(false);

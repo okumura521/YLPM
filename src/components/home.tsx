@@ -37,6 +37,8 @@ import {
 } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 
+import { handleGoogleSheetCreationFlow } from "@/lib/supabase";
+
 interface Post {
   id: string;
   content: string;
@@ -124,12 +126,12 @@ const Home = () => {
               navigate("/login", { replace: true });
             } else {
               setUser(retryUser);
-              await checkSheetExistence();
+              await handleSheetCreationOnLogin();
             }
           }, 500);
         } else {
           setUser(user);
-          await checkSheetExistence();
+          await handleSheetCreationOnLogin();
         }
       } catch (error) {
         console.error("Authentication check failed:", error);
@@ -155,33 +157,41 @@ const Home = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // Check Google Sheet existence
-  const checkSheetExistence = async () => {
+  // Handle Google Sheet creation flow on login
+  const handleSheetCreationOnLogin = async () => {
     try {
-      const settings = await getUserSettings();
-      if (settings?.google_sheet_url) {
-        addLogEntry("INFO", "Checking Google Sheet existence", {
-          url: settings.google_sheet_url,
-        });
-        const result = await checkGoogleSheetExists(settings.google_sheet_url);
-        if (!result.exists) {
-          const errorMsg =
-            "sheetが確認できないので、再度作成するか、googleDriveを確認してください";
-          setSheetError(errorMsg);
-          addLogEntry("ERROR", "Google Sheet not found", result);
-          toast({
-            title: "Google Sheetエラー",
-            description: errorMsg,
-            variant: "destructive",
-          });
-        } else {
+      // Only run this for Google OAuth users, not test users
+      const testUser = localStorage.getItem("testUser");
+      if (testUser) {
+        return;
+      }
+
+      const result = await handleGoogleSheetCreationFlow();
+      if (result.success) {
+        if (result.skipped) {
+          addLogEntry("INFO", "Google Sheet already exists, skipped creation");
           setSheetError("");
-          addLogEntry("INFO", "Google Sheet exists and is accessible");
+        } else {
+          addLogEntry("INFO", "Google Sheet created successfully on login");
+          setSheetError("");
+          toast({
+            title: "Google Sheet作成完了",
+            description: "SNS投稿管理用のGoogle Sheetが作成されました",
+          });
         }
+      } else {
+        const errorMsg = `Google Sheetの作成に失敗しました: ${result.error}`;
+        setSheetError(errorMsg);
+        addLogEntry("ERROR", "Google Sheet creation failed on login", result);
+        toast({
+          title: "Google Sheetエラー",
+          description: errorMsg,
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error("Error checking sheet existence:", error);
-      addLogEntry("ERROR", "Error checking sheet existence", error);
+      console.error("Error in sheet creation flow:", error);
+      addLogEntry("ERROR", "Error in sheet creation flow", error);
     }
   };
 

@@ -10,33 +10,37 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
-// Google API connection test
-export const testGoogleConnection = async (
-  clientId: string,
-  clientSecret: string,
-  redirectUri: string,
-) => {
-  try {
-    // This is a basic validation - in a real app you'd make an actual API call
-    if (!clientId || !clientSecret || !redirectUri) {
-      throw new Error("All Google API credentials are required");
-    }
-
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Basic format validation
-    if (!clientId.includes(".googleusercontent.com")) {
-      throw new Error("Invalid Google Client ID format");
-    }
-
-    return { success: true, message: "Google connection successful" };
-  } catch (error) {
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : "Connection failed",
+// Google Drive folder picker
+export const openGoogleDrivePicker = async (
+  accessToken: string,
+): Promise<{ folderId: string; folderName: string } | null> => {
+  return new Promise((resolve) => {
+    // Load Google Picker API
+    const script = document.createElement("script");
+    script.src = "https://apis.google.com/js/api.js";
+    script.onload = () => {
+      window.gapi.load("picker", () => {
+        const picker = new window.google.picker.PickerBuilder()
+          .addView(window.google.picker.ViewId.FOLDERS)
+          .setOAuthToken(accessToken)
+          .setDeveloperKey("YOUR_DEVELOPER_KEY") // You'll need to set this
+          .setCallback((data: any) => {
+            if (data.action === window.google.picker.Action.PICKED) {
+              const folder = data.docs[0];
+              resolve({
+                folderId: folder.id,
+                folderName: folder.name,
+              });
+            } else if (data.action === window.google.picker.Action.CANCEL) {
+              resolve(null);
+            }
+          })
+          .build();
+        picker.setVisible(true);
+      });
     };
-  }
+    document.head.appendChild(script);
+  });
 };
 
 // AI API connection test
@@ -81,12 +85,8 @@ export const testAIConnection = async (
   }
 };
 
-// Save user settings (encrypted)
+// Save user settings
 export const saveUserSettings = async (settings: {
-  googleClientId?: string;
-  googleClientSecret?: string;
-  googleRedirectUri?: string;
-  googleConnectionStatus?: boolean;
   googleSheetId?: string;
   googleSheetUrl?: string;
   aiService?: string;
@@ -106,10 +106,6 @@ export const saveUserSettings = async (settings: {
     .from("user_settings")
     .upsert({
       user_id: user.id,
-      google_client_id: settings.googleClientId,
-      google_client_secret: settings.googleClientSecret,
-      google_redirect_uri: settings.googleRedirectUri,
-      google_connection_status: settings.googleConnectionStatus,
       google_sheet_id: settings.googleSheetId,
       google_sheet_url: settings.googleSheetUrl,
       ai_service: settings.aiService,
@@ -151,16 +147,13 @@ export const getUserSettings = async () => {
   return data;
 };
 
-// Create Google Sheet
-export const createGoogleSheet = async (directoryId?: string) => {
+// Create Google Sheet with OAuth token
+export const createGoogleSheetWithOAuth = async (
+  accessToken: string,
+  folderId?: string,
+) => {
   try {
-    const settings = await getUserSettings();
-    if (!settings?.google_client_id || !settings?.google_client_secret) {
-      throw new Error("Google API credentials not configured");
-    }
-
-    // Get access token (this would normally be done through OAuth flow)
-    const accessToken = await getGoogleAccessToken(settings);
+    addLogEntry("INFO", "Creating Google Sheet with OAuth token", { folderId });
 
     // Create the sheet using Google Sheets API
     const response = await fetch(
@@ -206,6 +199,7 @@ export const createGoogleSheet = async (directoryId?: string) => {
     if (!response.ok) {
       const errorData = await response.json();
       console.error("Google Sheets API Error:", errorData);
+      addLogEntry("ERROR", "Google Sheets API Error", errorData);
       throw new Error(
         `Failed to create sheet: ${errorData.error?.message || "Unknown error"}`,
       );
@@ -215,14 +209,38 @@ export const createGoogleSheet = async (directoryId?: string) => {
     const sheetId = sheetData.spreadsheetId;
     const sheetUrl = sheetData.spreadsheetUrl;
 
+    // If folderId is provided, move the sheet to that folder
+    if (folderId) {
+      try {
+        await fetch(
+          `https://www.googleapis.com/drive/v3/files/${sheetId}?addParents=${folderId}`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          },
+        );
+        addLogEntry("INFO", "Sheet moved to selected folder", {
+          folderId,
+          sheetId,
+        });
+      } catch (moveError) {
+        console.warn("Failed to move sheet to folder:", moveError);
+        addLogEntry("WARN", "Failed to move sheet to folder", moveError);
+      }
+    }
+
     // Save sheet info to user settings
     await saveUserSettings({
-      ...settings,
       googleSheetId: sheetId,
       googleSheetUrl: sheetUrl,
     });
 
-    console.log("Google Sheet created successfully:", { sheetId, sheetUrl });
+    addLogEntry("INFO", "Google Sheet created successfully", {
+      sheetId,
+      sheetUrl,
+    });
 
     return {
       success: true,
@@ -232,6 +250,7 @@ export const createGoogleSheet = async (directoryId?: string) => {
     };
   } catch (error) {
     console.error("Error creating Google Sheet:", error);
+    addLogEntry("ERROR", "Error creating Google Sheet", error);
     return {
       success: false,
       message:
@@ -242,28 +261,24 @@ export const createGoogleSheet = async (directoryId?: string) => {
   }
 };
 
-// Get Google Access Token (simplified - in production use proper OAuth flow)
-const getGoogleAccessToken = async (settings: any) => {
-  // This is a simplified version - in production, implement proper OAuth flow
-  // For now, we'll simulate getting an access token
-  console.log("Getting Google access token...");
+// Get Google Access Token from Supabase session
+export const getGoogleAccessToken = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  // In a real implementation, you would:
-  // 1. Redirect user to Google OAuth
-  // 2. Get authorization code
-  // 3. Exchange code for access token
-  // 4. Store and refresh tokens as needed
+  if (!session?.provider_token) {
+    throw new Error("No Google access token found in session");
+  }
 
-  // For demo purposes, return a mock token
-  return "mock_access_token_" + Date.now();
+  return session.provider_token;
 };
 
-// Check if Google Sheet exists
+// Check if Google Sheet exists using OAuth token
 export const checkGoogleSheetExists = async (sheetUrl: string) => {
   try {
-    const settings = await getUserSettings();
-    if (!settings?.google_client_id || !sheetUrl) {
-      return { exists: false, error: "No sheet URL or credentials" };
+    if (!sheetUrl) {
+      return { exists: false, error: "No sheet URL provided" };
     }
 
     // Extract sheet ID from URL
@@ -273,7 +288,7 @@ export const checkGoogleSheetExists = async (sheetUrl: string) => {
     }
 
     const sheetId = sheetIdMatch[1];
-    const accessToken = await getGoogleAccessToken(settings);
+    const accessToken = await getGoogleAccessToken();
 
     const response = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`,
@@ -284,7 +299,10 @@ export const checkGoogleSheetExists = async (sheetUrl: string) => {
       },
     );
 
-    console.log("Sheet existence check response:", response.status);
+    addLogEntry("INFO", "Sheet existence check response", {
+      status: response.status,
+      sheetId,
+    });
 
     if (response.status === 404) {
       return { exists: false, error: "Sheet not found" };
@@ -293,6 +311,7 @@ export const checkGoogleSheetExists = async (sheetUrl: string) => {
     if (!response.ok) {
       const errorData = await response.json();
       console.error("Sheet check error:", errorData);
+      addLogEntry("ERROR", "Sheet check error", errorData);
       return {
         exists: false,
         error: errorData.error?.message || "Unknown error",
@@ -302,6 +321,7 @@ export const checkGoogleSheetExists = async (sheetUrl: string) => {
     return { exists: true };
   } catch (error) {
     console.error("Error checking sheet existence:", error);
+    addLogEntry("ERROR", "Error checking sheet existence", error);
     return {
       exists: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -309,18 +329,18 @@ export const checkGoogleSheetExists = async (sheetUrl: string) => {
   }
 };
 
-// Add post to Google Sheet
+// Add post to Google Sheet using OAuth token
 export const addPostToGoogleSheet = async (post: any) => {
   try {
     const settings = await getUserSettings();
-    if (!settings?.googleSheetId) {
+    if (!settings?.google_sheet_id) {
       throw new Error("Google Sheet not configured");
     }
 
-    const accessToken = await getGoogleAccessToken(settings);
+    const accessToken = await getGoogleAccessToken();
 
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${settings.googleSheetId}/values/Posts:append?valueInputOption=RAW`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/Posts:append?valueInputOption=RAW`,
       {
         method: "POST",
         headers: {
@@ -348,15 +368,81 @@ export const addPostToGoogleSheet = async (post: any) => {
     if (!response.ok) {
       const errorData = await response.json();
       console.error("Error adding post to sheet:", errorData);
+      addLogEntry("ERROR", "Error adding post to sheet", errorData);
       throw new Error(
         `Failed to add post: ${errorData.error?.message || "Unknown error"}`,
       );
     }
 
-    console.log("Post added to Google Sheet successfully");
+    addLogEntry("INFO", "Post added to Google Sheet successfully", {
+      postId: post.id,
+    });
     return { success: true };
   } catch (error) {
     console.error("Error adding post to Google Sheet:", error);
+    addLogEntry("ERROR", "Error adding post to Google Sheet", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+// Google Sheet creation flow for login
+export const handleGoogleSheetCreationFlow = async () => {
+  try {
+    addLogEntry("INFO", "Starting Google Sheet creation flow");
+
+    // Check if user already has a Google Sheet
+    const settings = await getUserSettings();
+    if (settings?.google_sheet_url) {
+      addLogEntry("INFO", "User already has Google Sheet, checking existence", {
+        url: settings.google_sheet_url,
+      });
+      const existsResult = await checkGoogleSheetExists(
+        settings.google_sheet_url,
+      );
+      if (existsResult.exists) {
+        addLogEntry("INFO", "Google Sheet exists, skipping creation");
+        return {
+          success: true,
+          skipped: true,
+          sheetUrl: settings.google_sheet_url,
+        };
+      } else {
+        addLogEntry(
+          "WARN",
+          "Google Sheet not found, will create new one",
+          existsResult,
+        );
+      }
+    }
+
+    // Get access token from current session
+    const accessToken = await getGoogleAccessToken();
+
+    // For now, create sheet in root directory
+    // In a full implementation, you would show the Google Drive picker here
+    const result = await createGoogleSheetWithOAuth(accessToken);
+
+    if (result.success) {
+      addLogEntry(
+        "INFO",
+        "Google Sheet creation flow completed successfully",
+        result,
+      );
+      return {
+        success: true,
+        sheetUrl: result.sheetUrl,
+        sheetId: result.sheetId,
+      };
+    } else {
+      addLogEntry("ERROR", "Google Sheet creation failed", result);
+      return { success: false, error: result.message };
+    }
+  } catch (error) {
+    console.error("Error in Google Sheet creation flow:", error);
+    addLogEntry("ERROR", "Error in Google Sheet creation flow", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
