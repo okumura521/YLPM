@@ -34,6 +34,9 @@ import {
   addLogEntry,
   getApplicationLogs,
   clearLogs,
+  getGoogleAccessToken,
+  openGoogleDrivePicker,
+  createGoogleSheetWithOAuth,
 } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 
