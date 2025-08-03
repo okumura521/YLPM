@@ -260,15 +260,36 @@ export const createGoogleSheetWithOAuth = async (
 
 // Get Google Access Token from Supabase session
 export const getGoogleAccessToken = async () => {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  try {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
 
-  if (!session?.provider_token) {
-    throw new Error("No Google access token found in session");
+    if (error) {
+      addLogEntry("ERROR", "Error getting session", error);
+      throw new Error(`Session error: ${error.message}`);
+    }
+
+    if (!session) {
+      addLogEntry("ERROR", "No session found");
+      throw new Error("No active session found");
+    }
+
+    if (!session.provider_token) {
+      addLogEntry("ERROR", "No provider token in session", {
+        sessionExists: !!session,
+        provider: session.user?.app_metadata?.provider,
+      });
+      throw new Error("No Google access token found in session");
+    }
+
+    addLogEntry("INFO", "Successfully retrieved Google access token");
+    return session.provider_token;
+  } catch (error) {
+    addLogEntry("ERROR", "Failed to get Google access token", error);
+    throw error;
   }
-
-  return session.provider_token;
 };
 
 // Check if Google Sheet exists using OAuth token
@@ -336,8 +357,10 @@ export const addPostToGoogleSheet = async (post: any) => {
 
     const accessToken = await getGoogleAccessToken();
 
+    // Properly encode the sheet name for the URL
+    const sheetName = encodeURIComponent("投稿データ");
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/投稿データ:append?valueInputOption=RAW`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}:append?valueInputOption=RAW`,
       {
         method: "POST",
         headers: {

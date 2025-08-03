@@ -101,6 +101,8 @@ const Home = () => {
   useEffect(() => {
     fetchPosts();
 
+    let sheetCreationExecuted = false;
+
     // Check authentication status with retry logic
     const getUser = async () => {
       try {
@@ -108,8 +110,6 @@ const Home = () => {
         const testUser = localStorage.getItem("testUser");
         if (testUser) {
           setUser(JSON.parse(testUser));
-          // Check Google Sheet existence for test user too
-          await checkSheetExistence();
           return;
         }
 
@@ -126,12 +126,18 @@ const Home = () => {
               navigate("/login", { replace: true });
             } else {
               setUser(retryUser);
-              await handleSheetCreationOnLogin();
+              if (!sheetCreationExecuted) {
+                sheetCreationExecuted = true;
+                await handleSheetCreationOnLogin();
+              }
             }
           }, 500);
         } else {
           setUser(user);
-          await handleSheetCreationOnLogin();
+          if (!sheetCreationExecuted) {
+            sheetCreationExecuted = true;
+            await handleSheetCreationOnLogin();
+          }
         }
       } catch (error) {
         console.error("Authentication check failed:", error);
@@ -151,6 +157,7 @@ const Home = () => {
         navigate("/login", { replace: true });
       } else if (event === "SIGNED_IN" && session?.user) {
         setUser(session.user);
+        // Don't call handleSheetCreationOnLogin here to avoid duplication
       }
     });
 
