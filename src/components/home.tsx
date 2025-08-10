@@ -392,11 +392,18 @@ const Home = () => {
 
   const handleCreatePost = async (post: Omit<Post, "id" | "updatedAt">) => {
     try {
+      // Don't create a new post here - the PostForm will handle the ID generation
+      // and call this function for each platform
       const newPost: Post = {
         ...post,
-        id: Date.now().toString(),
+        id: post.id || Date.now().toString(), // Use provided ID or generate new one
         updatedAt: new Date().toISOString(),
       };
+
+      addLogEntry("INFO", "Creating post", {
+        postId: newPost.id,
+        platforms: newPost.platforms,
+      });
 
       // Add to Google Sheet with enhanced error handling
       const result = await addPostToGoogleSheet({
@@ -405,12 +412,10 @@ const Home = () => {
       });
 
       if (result.success) {
-        // Refresh posts from Google Sheet
-        await fetchPosts();
-        toast({
-          title: "投稿作成完了",
-          description: "投稿がGoogle Sheetに保存されました",
+        addLogEntry("INFO", "Post created successfully", {
+          postId: newPost.id,
         });
+        // Don't refresh immediately for each platform - wait for all to complete
       } else {
         const errorMessage = result.error || "Failed to save post";
 
@@ -428,12 +433,9 @@ const Home = () => {
             });
 
             if (retryResult.success) {
-              await fetchPosts();
-              toast({
-                title: "投稿作成完了",
-                description: "投稿がGoogle Sheetに保存されました",
+              addLogEntry("INFO", "Post created successfully after retry", {
+                postId: newPost.id,
               });
-              setIsCreateDialogOpen(false);
               return;
             }
           }
@@ -443,6 +445,7 @@ const Home = () => {
       }
     } catch (error: any) {
       console.error("Error saving post:", error);
+      addLogEntry("ERROR", "Error creating post", { error, postId: post.id });
       const errorMessage = error?.message || "Unknown error";
 
       let userFriendlyMessage = "投稿の保存に失敗しました";
@@ -456,11 +459,8 @@ const Home = () => {
         description: userFriendlyMessage,
         variant: "destructive",
       });
-      // Still add to local state as fallback
-      setPosts([newPost, ...posts]);
+      throw error; // Re-throw to let PostForm handle it
     }
-
-    setIsCreateDialogOpen(false);
   };
 
   const handleEditPost = async (post: Post) => {
@@ -543,6 +543,8 @@ const Home = () => {
   const handleEditClick = (postId: string) => {
     const post = posts.find((p) => p.id === postId);
     if (post) {
+      addLogEntry("INFO", "Opening post for editing", { postId, post });
+
       // Convert the post data to match PostForm expectations
       const postForEdit = {
         ...post,
@@ -552,7 +554,19 @@ const Home = () => {
           ? new Date(post.scheduleTime)
           : undefined,
         isScheduled: !!post.scheduleTime,
+        // Add image data if available
+        images: [], // Will be populated from imageUrl if available
+        imageUrl: post.imageUrl || "",
       };
+
+      // If there are image URLs, we should note them for the user
+      if (post.imageUrl) {
+        addLogEntry("INFO", "Post has associated images", {
+          postId,
+          imageUrl: post.imageUrl,
+        });
+      }
+
       setCurrentPost(postForEdit);
       setIsEditDialogOpen(true);
     }
@@ -729,7 +743,14 @@ const Home = () => {
             <DialogTitle>新規投稿作成</DialogTitle>
           </DialogHeader>
           <PostForm
-            onSubmit={handleCreatePost}
+            onSubmit={async (postData) => {
+              await handleCreatePost(postData);
+              // Refresh posts after all platforms are processed
+              setTimeout(() => {
+                fetchPosts();
+                setIsCreateDialogOpen(false);
+              }, 1000);
+            }}
             onCancel={() => setIsCreateDialogOpen(false)}
           />
         </DialogContent>

@@ -676,7 +676,7 @@ export const addPostToGoogleSheet = async (post: any) => {
 
     const accessToken = await getGoogleAccessToken();
 
-    // Upload images if present
+    // Upload images if present and associate them with the post ID
     let imageUrls: string[] = [];
     if (
       post.images &&
@@ -684,13 +684,31 @@ export const addPostToGoogleSheet = async (post: any) => {
       settings.google_drive_folder_id
     ) {
       for (const image of post.images) {
+        // Create a unique filename that includes the post ID for association
+        const originalName = image.name;
+        const extension = originalName.split(".").pop();
+        const baseId = post.id.includes("_") ? post.id.split("_")[0] : post.id;
+        const uniqueFileName = `${baseId}_${Date.now()}_${originalName}`;
+
+        // Create a new File object with the unique name
+        const renamedFile = new File([image], uniqueFileName, {
+          type: image.type,
+        });
+
         const uploadResult = await uploadImageToGoogleDrive(
           accessToken,
-          image,
+          renamedFile,
           settings.google_drive_folder_id,
         );
         if (uploadResult.success) {
           imageUrls.push(uploadResult.directUrl || "");
+          addLogEntry("INFO", "Image uploaded with post association", {
+            postId: post.id,
+            baseId,
+            originalName,
+            uniqueFileName,
+            imageUrl: uploadResult.directUrl,
+          });
         }
       }
     }
@@ -698,11 +716,23 @@ export const addPostToGoogleSheet = async (post: any) => {
     const imageUrl = imageUrls.join(",");
     const sheetName = encodeURIComponent("投稿データ");
 
-    // Use the post ID directly (it should already include platform suffix)
+    // Ensure the post ID is properly formatted
     const postId = post.id;
     const platform = Array.isArray(post.platforms)
       ? post.platforms[0]
       : post.platforms;
+
+    // Validate that we have a proper post ID with platform suffix for new posts
+    if (!postId.includes("_") && platform) {
+      addLogEntry(
+        "WARN",
+        "Post ID missing platform suffix, this may cause duplicates",
+        {
+          postId,
+          platform,
+        },
+      );
+    }
 
     const response = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}:append?valueInputOption=RAW`,
@@ -745,6 +775,7 @@ export const addPostToGoogleSheet = async (post: any) => {
       postId: postId,
       platform: platform,
       imageUrl,
+      imageCount: imageUrls.length,
     });
     return { success: true };
   } catch (error) {
