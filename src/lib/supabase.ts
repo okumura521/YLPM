@@ -94,6 +94,8 @@ export const saveUserSettings = async (settings: {
   aiModel?: string;
   aiApiToken?: string;
   aiConnectionStatus?: boolean;
+  imagesCommaSeparated?: string;
+  imagesJsonArray?: string;
 }) => {
   const {
     data: { user },
@@ -103,27 +105,80 @@ export const saveUserSettings = async (settings: {
     throw new Error("User not authenticated");
   }
 
-  const { data, error } = await supabase
+  // First check if user settings already exist
+  const { data: existingSettings } = await supabase
     .from("user_settings")
-    .upsert({
-      user_id: user.id,
-      google_sheet_id: settings.googleSheetId,
-      google_sheet_url: settings.googleSheetUrl,
-      google_drive_folder_id: settings.googleDriveFolderId,
-      google_drive_folder_name: settings.googleDriveFolderName,
-      google_drive_folder_url: settings.googleDriveFolderUrl,
-      ai_service: settings.aiService,
-      ai_model: settings.aiModel,
-      ai_api_token: settings.aiApiToken,
-      ai_connection_status: settings.aiConnectionStatus,
-    })
-    .select()
+    .select("id")
+    .eq("user_id", user.id)
     .single();
 
+  let data, error;
+
+  if (existingSettings) {
+    // Update existing record
+    const updateData: any = {};
+    if (settings.googleSheetId !== undefined)
+      updateData.google_sheet_id = settings.googleSheetId;
+    if (settings.googleSheetUrl !== undefined)
+      updateData.google_sheet_url = settings.googleSheetUrl;
+    if (settings.googleDriveFolderId !== undefined)
+      updateData.google_drive_folder_id = settings.googleDriveFolderId;
+    if (settings.googleDriveFolderName !== undefined)
+      updateData.google_drive_folder_name = settings.googleDriveFolderName;
+    if (settings.googleDriveFolderUrl !== undefined)
+      updateData.google_drive_folder_url = settings.googleDriveFolderUrl;
+    if (settings.aiService !== undefined)
+      updateData.ai_service = settings.aiService;
+    if (settings.aiModel !== undefined) updateData.ai_model = settings.aiModel;
+    if (settings.aiApiToken !== undefined)
+      updateData.ai_api_token = settings.aiApiToken;
+    if (settings.aiConnectionStatus !== undefined)
+      updateData.ai_connection_status = settings.aiConnectionStatus;
+    if (settings.imagesCommaSeparated !== undefined)
+      updateData.images_comma_separated = settings.imagesCommaSeparated;
+    if (settings.imagesJsonArray !== undefined)
+      updateData.images_json_array = settings.imagesJsonArray;
+
+    const result = await supabase
+      .from("user_settings")
+      .update(updateData)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    data = result.data;
+    error = result.error;
+  } else {
+    // Insert new record
+    const result = await supabase
+      .from("user_settings")
+      .insert({
+        user_id: user.id,
+        google_sheet_id: settings.googleSheetId,
+        google_sheet_url: settings.googleSheetUrl,
+        google_drive_folder_id: settings.googleDriveFolderId,
+        google_drive_folder_name: settings.googleDriveFolderName,
+        google_drive_folder_url: settings.googleDriveFolderUrl,
+        ai_service: settings.aiService,
+        ai_model: settings.aiModel,
+        ai_api_token: settings.aiApiToken,
+        ai_connection_status: settings.aiConnectionStatus,
+        images_comma_separated: settings.imagesCommaSeparated,
+        images_json_array: settings.imagesJsonArray,
+      })
+      .select()
+      .single();
+
+    data = result.data;
+    error = result.error;
+  }
+
   if (error) {
+    addLogEntry("ERROR", "Error saving user settings", error);
     throw error;
   }
 
+  addLogEntry("INFO", "User settings saved successfully", data);
   return data;
 };
 
@@ -346,6 +401,10 @@ export const createGoogleSheetWithOAuth = async (
                         { userEnteredValue: { stringValue: "予定時刻" } },
                         { userEnteredValue: { stringValue: "ステータス" } },
                         { userEnteredValue: { stringValue: "画像URL" } },
+                        {
+                          userEnteredValue: { stringValue: "画像カンマ区切り" },
+                        },
+                        { userEnteredValue: { stringValue: "画像JSON配列" } },
                         { userEnteredValue: { stringValue: "削除フラグ" } },
                         { userEnteredValue: { stringValue: "作成日時" } },
                         { userEnteredValue: { stringValue: "更新日時" } },
@@ -656,6 +715,8 @@ export const addPostToGoogleSheet = async (post: any) => {
                 post.scheduleTime || new Date().toISOString(),
                 post.status || "pending",
                 imageUrl,
+                post.imagesCommaSeparated || "",
+                post.imagesJsonArray || "",
                 "FALSE", // Delete flag
                 new Date().toISOString(),
                 new Date().toISOString(),
