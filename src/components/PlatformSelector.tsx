@@ -19,6 +19,7 @@ export interface Platform {
   description: string;
   characterLimit?: number;
   fileTypes?: string[];
+  maxImages?: number | null;
 }
 
 export interface PlatformSelectorProps {
@@ -35,54 +36,60 @@ const defaultPlatforms: Platform[] = [
     name: "X (Twitter)",
     icon: <span className="text-lg">𝕏</span>,
     color: "bg-black",
-    description: "Short messages with images or videos",
+    description: "Short messages with images or videos (最大4枚)",
     characterLimit: 280,
     fileTypes: ["jpg", "png", "gif", "mp4"],
+    maxImages: 4,
   },
   {
     id: "instagram",
     name: "Instagram",
     icon: <span className="text-lg">📸</span>,
     color: "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500",
-    description: "Visual content with captions",
+    description: "Visual content with captions (最大10枚)",
     characterLimit: 2200,
     fileTypes: ["jpg", "png", "mp4"],
+    maxImages: 10,
   },
   {
     id: "facebook",
     name: "Facebook",
     icon: <span className="text-lg">📘</span>,
     color: "bg-blue-600",
-    description: "Posts with text, images, videos, and links",
+    description: "Posts with text, images, videos, and links (制限なし)",
     characterLimit: 63206,
     fileTypes: ["jpg", "png", "gif", "mp4", "pdf"],
+    maxImages: null,
   },
   {
     id: "line",
     name: "LINE",
     icon: <span className="text-lg">💬</span>,
     color: "bg-green-500",
-    description: "Messaging platform popular in Japan",
+    description: "Messaging platform popular in Japan (最大20枚)",
     characterLimit: 1000,
     fileTypes: ["jpg", "png", "gif"],
+    maxImages: 20,
   },
   {
     id: "discord",
     name: "Discord",
     icon: <span className="text-lg">🎮</span>,
     color: "bg-indigo-600",
-    description: "Community messaging platform",
+    description: "Community messaging platform (最大10枚)",
     characterLimit: 2000,
     fileTypes: ["jpg", "png", "gif", "mp4"],
+    maxImages: 10,
   },
   {
     id: "wordpress",
     name: "WordPress",
     icon: <span className="text-lg">📝</span>,
     color: "bg-blue-800",
-    description: "Blog posts and articles",
+    description: "Blog posts and articles (制限なし)",
     characterLimit: null,
     fileTypes: ["jpg", "png", "gif", "mp4", "pdf", "doc", "docx"],
+    maxImages: null,
   },
 ];
 
@@ -162,6 +169,14 @@ const PlatformSelector: React.FC<PlatformSelectorProps> = ({
                     {platform.fileTypes && platform.fileTypes.length > 0 && (
                       <p className="text-xs mt-1">
                         Supported files: {platform.fileTypes.join(", ")}
+                      </p>
+                    )}
+                    {platform.maxImages !== undefined && (
+                      <p className="text-xs mt-1">
+                        画像:{" "}
+                        {platform.maxImages === null
+                          ? "制限なし"
+                          : `最大${platform.maxImages}枚`}
                       </p>
                     )}
                   </div>

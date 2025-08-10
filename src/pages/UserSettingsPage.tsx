@@ -57,6 +57,9 @@ export default function UserSettingsPage() {
 
   // Sheet settings
   const [googleSheetUrl, setGoogleSheetUrl] = useState("");
+  const [googleDriveFolderId, setGoogleDriveFolderId] = useState("");
+  const [googleDriveFolderName, setGoogleDriveFolderName] = useState("");
+  const [googleDriveFolderUrl, setGoogleDriveFolderUrl] = useState("");
 
   // Load existing settings
   useEffect(() => {
@@ -65,6 +68,9 @@ export default function UserSettingsPage() {
         const settings = await getUserSettings();
         if (settings) {
           setGoogleSheetUrl(settings.google_sheet_url || "");
+          setGoogleDriveFolderId(settings.google_drive_folder_id || "");
+          setGoogleDriveFolderName(settings.google_drive_folder_name || "");
+          setGoogleDriveFolderUrl(settings.google_drive_folder_url || "");
           setAiService(settings.ai_service || "");
           setAiModel(settings.ai_model || "");
           setAiApiToken(settings.ai_api_token || "");
@@ -190,19 +196,42 @@ export default function UserSettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {googleSheetUrl ? (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                <p className="text-sm font-medium text-green-800 mb-2">
-                  Google Sheet URL:
-                </p>
-                <a
-                  href={googleSheetUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
-                >
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {googleSheetUrl}
-                </a>
+              <div className="space-y-4">
+                <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                  <p className="text-sm font-medium text-green-800 mb-2">
+                    Google Sheet URL:
+                  </p>
+                  <a
+                    href={googleSheetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    {googleSheetUrl}
+                  </a>
+                </div>
+                {googleDriveFolderUrl && (
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                    <p className="text-sm font-medium text-blue-800 mb-2">
+                      Google Drive 画像フォルダ:
+                    </p>
+                    <div className="space-y-1">
+                      <p className="text-sm text-gray-700">
+                        フォルダ名: {googleDriveFolderName}
+                      </p>
+                      <a
+                        href={googleDriveFolderUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
+                      >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        {googleDriveFolderUrl}
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">

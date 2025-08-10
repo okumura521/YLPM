@@ -10,6 +10,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
+// Token refresh tracking
+let tokenRefreshInProgress = false;
+
 // Google Drive folder picker
 export const openGoogleDrivePicker = async (
   accessToken: string,
@@ -84,6 +87,9 @@ export const testAIConnection = async (
 export const saveUserSettings = async (settings: {
   googleSheetId?: string;
   googleSheetUrl?: string;
+  googleDriveFolderId?: string;
+  googleDriveFolderName?: string;
+  googleDriveFolderUrl?: string;
   aiService?: string;
   aiModel?: string;
   aiApiToken?: string;
@@ -103,6 +109,9 @@ export const saveUserSettings = async (settings: {
       user_id: user.id,
       google_sheet_id: settings.googleSheetId,
       google_sheet_url: settings.googleSheetUrl,
+      google_drive_folder_id: settings.googleDriveFolderId,
+      google_drive_folder_name: settings.googleDriveFolderName,
+      google_drive_folder_url: settings.googleDriveFolderUrl,
       ai_service: settings.aiService,
       ai_model: settings.aiModel,
       ai_api_token: settings.aiApiToken,
@@ -140,6 +149,162 @@ export const getUserSettings = async () => {
   }
 
   return data;
+};
+
+// Create Google Drive folder for images
+export const createGoogleDriveImageFolder = async (
+  accessToken: string,
+  parentFolderId?: string,
+) => {
+  try {
+    addLogEntry("INFO", "Creating Google Drive image folder", {
+      parentFolderId,
+    });
+
+    const folderName = `YLPM Images - ${new Date().toISOString().split("T")[0]}`;
+
+    const response = await fetch("https://www.googleapis.com/drive/v3/files", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: folderName,
+        mimeType: "application/vnd.google-apps.folder",
+        parents: parentFolderId ? [parentFolderId] : undefined,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Google Drive API Error:", errorData);
+      addLogEntry("ERROR", "Google Drive API Error", errorData);
+      throw new Error(
+        `Failed to create folder: ${errorData.error?.message || "Unknown error"}`,
+      );
+    }
+
+    const folderData = await response.json();
+    const folderId = folderData.id;
+    const folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
+
+    addLogEntry("INFO", "Google Drive image folder created successfully", {
+      folderId,
+      folderName,
+      folderUrl,
+    });
+
+    return {
+      success: true,
+      folderId,
+      folderName,
+      folderUrl,
+      message: "Google Drive image folder created successfully",
+    };
+  } catch (error) {
+    console.error("Error creating Google Drive image folder:", error);
+    addLogEntry("ERROR", "Error creating Google Drive image folder", error);
+    return {
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to create Google Drive image folder",
+    };
+  }
+};
+
+// Upload image to Google Drive
+export const uploadImageToGoogleDrive = async (
+  accessToken: string,
+  file: File,
+  folderId: string,
+) => {
+  try {
+    addLogEntry("INFO", "Uploading image to Google Drive", {
+      fileName: file.name,
+      folderId,
+    });
+
+    // Create file metadata
+    const metadata = {
+      name: `${Date.now()}_${file.name}`,
+      parents: [folderId],
+    };
+
+    // Create form data for multipart upload
+    const formData = new FormData();
+    formData.append(
+      "metadata",
+      new Blob([JSON.stringify(metadata)], { type: "application/json" }),
+    );
+    formData.append("file", file);
+
+    const response = await fetch(
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: formData,
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Google Drive upload error:", errorData);
+      addLogEntry("ERROR", "Google Drive upload error", errorData);
+      throw new Error(
+        `Failed to upload image: ${errorData.error?.message || "Unknown error"}`,
+      );
+    }
+
+    const fileData = await response.json();
+    const fileId = fileData.id;
+    const fileUrl = `https://drive.google.com/file/d/${fileId}/view`;
+
+    // Make the file publicly viewable
+    await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          role: "reader",
+          type: "anyone",
+        }),
+      },
+    );
+
+    addLogEntry("INFO", "Image uploaded to Google Drive successfully", {
+      fileId,
+      fileName: fileData.name,
+      fileUrl,
+    });
+
+    return {
+      success: true,
+      fileId,
+      fileName: fileData.name,
+      fileUrl,
+      directUrl: `https://drive.google.com/uc?id=${fileId}`,
+    };
+  } catch (error) {
+    console.error("Error uploading image to Google Drive:", error);
+    addLogEntry("ERROR", "Error uploading image to Google Drive", error);
+    return {
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to upload image to Google Drive",
+    };
+  }
 };
 
 // Create Google Sheet with OAuth token
@@ -180,6 +345,8 @@ export const createGoogleSheetWithOAuth = async (
                         },
                         { userEnteredValue: { stringValue: "予定時刻" } },
                         { userEnteredValue: { stringValue: "ステータス" } },
+                        { userEnteredValue: { stringValue: "画像URL" } },
+                        { userEnteredValue: { stringValue: "削除フラグ" } },
                         { userEnteredValue: { stringValue: "作成日時" } },
                         { userEnteredValue: { stringValue: "更新日時" } },
                       ],
@@ -228,21 +395,37 @@ export const createGoogleSheetWithOAuth = async (
       }
     }
 
-    // Save sheet info to user settings
-    await saveUserSettings({
+    // Create image folder
+    const imageFolderResult = await createGoogleDriveImageFolder(
+      accessToken,
+      folderId,
+    );
+
+    // Save sheet info and folder info to user settings
+    const settingsToSave: any = {
       googleSheetId: sheetId,
       googleSheetUrl: sheetUrl,
-    });
+    };
+
+    if (imageFolderResult.success) {
+      settingsToSave.googleDriveFolderId = imageFolderResult.folderId;
+      settingsToSave.googleDriveFolderName = imageFolderResult.folderName;
+      settingsToSave.googleDriveFolderUrl = imageFolderResult.folderUrl;
+    }
+
+    await saveUserSettings(settingsToSave);
 
     addLogEntry("INFO", "Google Sheet created successfully", {
       sheetId,
       sheetUrl,
+      imageFolder: imageFolderResult,
     });
 
     return {
       success: true,
       sheetId,
       sheetUrl,
+      imageFolder: imageFolderResult,
       message: "Google Sheet created successfully",
     };
   } catch (error) {
@@ -258,8 +441,47 @@ export const createGoogleSheetWithOAuth = async (
   }
 };
 
-// Get Google Access Token from Supabase session
-export const getGoogleAccessToken = async () => {
+// Refresh Google Access Token
+export const refreshGoogleAccessToken = async (): Promise<boolean> => {
+  if (tokenRefreshInProgress) {
+    addLogEntry("INFO", "Token refresh already in progress, waiting...");
+    // Wait for ongoing refresh to complete
+    let attempts = 0;
+    while (tokenRefreshInProgress && attempts < 10) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      attempts++;
+    }
+    return !tokenRefreshInProgress;
+  }
+
+  try {
+    tokenRefreshInProgress = true;
+    addLogEntry("INFO", "Attempting to refresh Google access token");
+
+    const refreshResult = await supabase.auth.refreshSession();
+
+    if (refreshResult.error) {
+      addLogEntry("ERROR", "Failed to refresh session", refreshResult.error);
+      return false;
+    }
+
+    if (refreshResult.data?.session?.provider_token) {
+      addLogEntry("INFO", "Google access token refreshed successfully");
+      return true;
+    }
+
+    addLogEntry("WARN", "Session refreshed but no provider token found");
+    return false;
+  } catch (error) {
+    addLogEntry("ERROR", "Error refreshing Google access token", error);
+    return false;
+  } finally {
+    tokenRefreshInProgress = false;
+  }
+};
+
+// Get Google Access Token from Supabase session with auto-refresh
+export const getGoogleAccessToken = async (retryCount = 0): Promise<string> => {
   try {
     const {
       data: { session },
@@ -277,9 +499,18 @@ export const getGoogleAccessToken = async () => {
     }
 
     if (!session.provider_token) {
+      if (retryCount === 0) {
+        addLogEntry("INFO", "No provider token, attempting refresh");
+        const refreshed = await refreshGoogleAccessToken();
+        if (refreshed) {
+          return getGoogleAccessToken(1); // Retry once
+        }
+      }
+
       addLogEntry("ERROR", "No provider token in session", {
         sessionExists: !!session,
         provider: session.user?.app_metadata?.provider,
+        retryCount,
       });
       throw new Error("No Google access token found in session");
     }
@@ -289,6 +520,35 @@ export const getGoogleAccessToken = async () => {
   } catch (error) {
     addLogEntry("ERROR", "Failed to get Google access token", error);
     throw error;
+  }
+};
+
+// Check Google token validity
+export const checkGoogleTokenValidity = async (): Promise<boolean> => {
+  try {
+    const accessToken = await getGoogleAccessToken();
+
+    // Test the token by making a simple API call
+    const response = await fetch(
+      "https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=" +
+        accessToken,
+    );
+
+    if (response.ok) {
+      const tokenInfo = await response.json();
+      addLogEntry("INFO", "Google token is valid", {
+        expiresIn: tokenInfo.expires_in,
+      });
+      return true;
+    } else {
+      addLogEntry("WARN", "Google token validation failed", {
+        status: response.status,
+      });
+      return false;
+    }
+  } catch (error) {
+    addLogEntry("ERROR", "Error checking Google token validity", error);
+    return false;
   }
 };
 
@@ -347,7 +607,7 @@ export const checkGoogleSheetExists = async (sheetUrl: string) => {
   }
 };
 
-// Add post to Google Sheet using OAuth token
+// Add post to Google Sheet using OAuth token (platform-specific)
 export const addPostToGoogleSheet = async (post: any) => {
   try {
     const settings = await getUserSettings();
@@ -357,45 +617,68 @@ export const addPostToGoogleSheet = async (post: any) => {
 
     const accessToken = await getGoogleAccessToken();
 
-    // Properly encode the sheet name for the URL
-    const sheetName = encodeURIComponent("投稿データ");
-    const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}:append?valueInputOption=RAW`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          values: [
-            [
-              post.id,
-              post.content,
-              Array.isArray(post.platforms)
-                ? post.platforms.join(", ")
-                : post.platforms,
-              post.scheduleTime || new Date().toISOString(),
-              post.status || "pending",
-              new Date().toISOString(),
-              new Date().toISOString(),
-            ],
-          ],
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Error adding post to sheet:", errorData);
-      addLogEntry("ERROR", "Error adding post to sheet", errorData);
-      throw new Error(
-        `Failed to add post: ${errorData.error?.message || "Unknown error"}`,
+    // Upload image if present
+    let imageUrl = "";
+    if (post.image && settings.google_drive_folder_id) {
+      const uploadResult = await uploadImageToGoogleDrive(
+        accessToken,
+        post.image,
+        settings.google_drive_folder_id,
       );
+      if (uploadResult.success) {
+        imageUrl = uploadResult.directUrl || "";
+      }
+    }
+
+    // Create separate records for each platform
+    const platforms = Array.isArray(post.platforms)
+      ? post.platforms
+      : [post.platforms];
+    const sheetName = encodeURIComponent("投稿データ");
+
+    for (const platform of platforms) {
+      const platformPostId = `${post.id}_${platform}`;
+
+      const response = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}:append?valueInputOption=RAW`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            values: [
+              [
+                platformPostId,
+                post.content,
+                platform,
+                post.scheduleTime || new Date().toISOString(),
+                post.status || "pending",
+                imageUrl,
+                "FALSE", // Delete flag
+                new Date().toISOString(),
+                new Date().toISOString(),
+              ],
+            ],
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Error adding post to sheet:", errorData);
+        addLogEntry("ERROR", "Error adding post to sheet", errorData);
+        throw new Error(
+          `Failed to add post: ${errorData.error?.message || "Unknown error"}`,
+        );
+      }
     }
 
     addLogEntry("INFO", "Post added to Google Sheet successfully", {
       postId: post.id,
+      platforms: platforms,
+      imageUrl,
     });
     return { success: true };
   } catch (error) {
@@ -408,7 +691,101 @@ export const addPostToGoogleSheet = async (post: any) => {
   }
 };
 
-// Fetch posts from Google Sheet
+// Update post in Google Sheet (soft delete)
+export const updatePostInGoogleSheet = async (postId: string, updates: any) => {
+  try {
+    const settings = await getUserSettings();
+    if (!settings?.google_sheet_id) {
+      throw new Error("Google Sheet not configured");
+    }
+
+    const accessToken = await getGoogleAccessToken();
+    const sheetName = encodeURIComponent("投稿データ");
+
+    // Get all data to find the row
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}?majorDimension=ROWS`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch sheet data");
+    }
+
+    const data = await response.json();
+    const rows = data.values || [];
+
+    // Find rows that match the post ID (could be multiple for different platforms)
+    const matchingRows = [];
+    for (let i = 1; i < rows.length; i++) {
+      // Skip header row
+      const row = rows[i];
+      if (row[0] && row[0].startsWith(postId)) {
+        matchingRows.push({ index: i + 1, data: row }); // +1 for 1-based indexing
+      }
+    }
+
+    // Update each matching row
+    for (const { index, data } of matchingRows) {
+      const updatedRow = [...data];
+
+      if (updates.content !== undefined) updatedRow[1] = updates.content;
+      if (updates.scheduleTime !== undefined)
+        updatedRow[3] = updates.scheduleTime;
+      if (updates.status !== undefined) updatedRow[4] = updates.status;
+      if (updates.deleted !== undefined)
+        updatedRow[6] = updates.deleted ? "TRUE" : "FALSE";
+      updatedRow[8] = new Date().toISOString(); // Update timestamp
+
+      const updateResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}!A${index}:I${index}?valueInputOption=RAW`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            values: [updatedRow],
+          }),
+        },
+      );
+
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json();
+        console.error("Error updating post in sheet:", errorData);
+        throw new Error(
+          `Failed to update post: ${errorData.error?.message || "Unknown error"}`,
+        );
+      }
+    }
+
+    addLogEntry("INFO", "Post updated in Google Sheet successfully", {
+      postId,
+      updates,
+      rowsUpdated: matchingRows.length,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating post in Google Sheet:", error);
+    addLogEntry("ERROR", "Error updating post in Google Sheet", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+// Soft delete post in Google Sheet
+export const deletePostInGoogleSheet = async (postId: string) => {
+  return updatePostInGoogleSheet(postId, { deleted: true });
+};
+
+// Fetch posts from Google Sheet (excluding soft deleted)
 export const fetchPostsFromGoogleSheet = async () => {
   try {
     const settings = await getUserSettings();
@@ -440,15 +817,41 @@ export const fetchPostsFromGoogleSheet = async () => {
     const data = await response.json();
     const rows = data.values || [];
 
-    // Skip header row and convert to post objects
-    const posts = rows.slice(1).map((row: string[], index: number) => ({
-      id: row[0] || `sheet-${index}`,
-      content: row[1] || "",
-      channels: row[2] ? row[2].split(", ").filter(Boolean) : [],
-      scheduleTime: row[3] || new Date().toISOString(),
-      status: (row[4] as "pending" | "sent" | "failed") || "pending",
-      updatedAt: row[6] || row[5] || new Date().toISOString(),
-    }));
+    // Group posts by base ID and filter out deleted ones
+    const postsMap = new Map();
+
+    // Skip header row and process data
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const fullId = row[0] || `sheet-${i}`;
+      const isDeleted = row[6] === "TRUE";
+
+      if (isDeleted) continue; // Skip soft deleted posts
+
+      // Extract base post ID (remove platform suffix)
+      const baseId = fullId.includes("_") ? fullId.split("_")[0] : fullId;
+      const platform = fullId.includes("_") ? fullId.split("_")[1] : row[2];
+
+      if (!postsMap.has(baseId)) {
+        postsMap.set(baseId, {
+          id: baseId,
+          content: row[1] || "",
+          channels: [],
+          scheduleTime: row[3] || new Date().toISOString(),
+          status: (row[4] as "pending" | "sent" | "failed") || "pending",
+          imageUrl: row[5] || "",
+          updatedAt: row[8] || row[7] || new Date().toISOString(),
+        });
+      }
+
+      // Add platform to channels if not already present
+      const post = postsMap.get(baseId);
+      if (platform && !post.channels.includes(platform)) {
+        post.channels.push(platform);
+      }
+    }
+
+    const posts = Array.from(postsMap.values());
 
     addLogEntry("INFO", "Posts fetched from Google Sheet successfully", {
       count: posts.length,

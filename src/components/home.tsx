@@ -39,6 +39,10 @@ import {
   createGoogleSheetWithOAuth,
   fetchPostsFromGoogleSheet,
   addPostToGoogleSheet,
+  updatePostInGoogleSheet,
+  deletePostInGoogleSheet,
+  checkGoogleTokenValidity,
+  refreshGoogleAccessToken,
 } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -51,6 +55,7 @@ interface Post {
   channels: string[];
   status: "pending" | "sent" | "failed";
   updatedAt: string;
+  imageUrl?: string;
 }
 
 const Home = () => {
@@ -66,19 +71,101 @@ const Home = () => {
   const [logs, setLogs] = useState<any[]>([]);
   const [sheetError, setSheetError] = useState<string>("");
   const sheetCreationHandled = useRef(false);
+  const tokenRefreshAttempted = useRef(false);
+  const fetchRetryAttempted = useRef(false);
 
-  // Fetch posts from Google Sheets
-  const fetchPosts = async () => {
+  // Check Google token validity
+  const checkGoogleTokenValidityLocal = async (): Promise<boolean> => {
+    try {
+      return await checkGoogleTokenValidity();
+    } catch (error) {
+      addLogEntry("ERROR", "Error checking Google token validity", error);
+      return false;
+    }
+  };
+
+  // Refresh Google token
+  const refreshGoogleToken = async (): Promise<boolean> => {
+    if (tokenRefreshAttempted.current) {
+      addLogEntry("INFO", "Token refresh already attempted, skipping");
+      return false;
+    }
+
+    try {
+      tokenRefreshAttempted.current = true;
+      addLogEntry("INFO", "Attempting to refresh Google token");
+
+      const refreshed = await refreshGoogleAccessToken();
+      if (refreshed) {
+        addLogEntry("INFO", "Google token refreshed successfully");
+        setSheetError(""); // Clear any existing errors
+        return true;
+      } else {
+        addLogEntry("ERROR", "Failed to refresh Google token");
+        return false;
+      }
+    } catch (error) {
+      addLogEntry("ERROR", "Error refreshing Google token", error);
+      return false;
+    }
+  };
+
+  // Fetch posts from Google Sheets with retry logic
+  const fetchPosts = async (retryOnTokenError = true) => {
     setIsLoading(true);
     try {
+      // Check if it's a test user
+      const testUser = localStorage.getItem("testUser");
+      if (testUser) {
+        addLogEntry("INFO", "Test user detected, using mock data");
+        setPosts([]);
+        return;
+      }
+
       const postsFromSheet = await fetchPostsFromGoogleSheet();
       setPosts(postsFromSheet);
+      setSheetError(""); // Clear any existing errors
+      fetchRetryAttempted.current = false; // Reset retry flag on success
       addLogEntry("INFO", "Posts fetched successfully", {
         count: postsFromSheet.length,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching posts:", error);
       addLogEntry("ERROR", "Error fetching posts", error);
+
+      const errorMessage = error?.message || "Unknown error";
+
+      // Check if it's a token-related error and retry once
+      if (
+        retryOnTokenError &&
+        !fetchRetryAttempted.current &&
+        (errorMessage.includes("access token") ||
+          errorMessage.includes("401") ||
+          errorMessage.includes("403"))
+      ) {
+        fetchRetryAttempted.current = true;
+        addLogEntry(
+          "INFO",
+          "Token error detected, attempting refresh and retry",
+        );
+
+        const refreshed = await refreshGoogleToken();
+        if (refreshed) {
+          // Retry fetching posts
+          setTimeout(() => fetchPosts(false), 1000);
+          return;
+        }
+      }
+
+      // Set user-friendly error message
+      if (errorMessage.includes("access token")) {
+        setSheetError(
+          "Google認証の期限が切れています。再ログインまたは設定の確認をお願いします。",
+        );
+      } else {
+        setSheetError(`データ取得エラー: ${errorMessage}`);
+      }
+
       toast({
         title: "データ取得エラー",
         description: "投稿データの取得に失敗しました",
@@ -135,6 +222,8 @@ const Home = () => {
         // Clear test user session
         localStorage.removeItem("testUser");
         sheetCreationHandled.current = false;
+        tokenRefreshAttempted.current = false;
+        fetchRetryAttempted.current = false;
         navigate("/login", { replace: true });
       } else if (event === "SIGNED_IN" && session?.user) {
         setUser(session.user);
@@ -152,7 +241,32 @@ const Home = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // Handle Google Sheet creation flow on login
+  // Periodic token check (every 5 minutes)
+  useEffect(() => {
+    const interval = setInterval(
+      async () => {
+        if (
+          user?.app_metadata?.provider === "google" &&
+          !localStorage.getItem("testUser")
+        ) {
+          const isValid = await checkGoogleTokenValidityLocal();
+          if (!isValid && !tokenRefreshAttempted.current) {
+            const refreshed = await refreshGoogleToken();
+            if (!refreshed) {
+              setSheetError(
+                "Google認証の期限が切れています。再ログインしてください。",
+              );
+            }
+          }
+        }
+      },
+      5 * 60 * 1000,
+    ); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Handle Google Sheet creation flow on login with enhanced error handling
   const handleSheetCreationOnLogin = async () => {
     try {
       // Only run this for Google OAuth users, not test users
@@ -162,6 +276,19 @@ const Home = () => {
       }
 
       addLogEntry("INFO", "Starting Google Sheet creation flow on login");
+
+      // Check token validity first
+      const tokenValid = await checkGoogleTokenValidityLocal();
+      if (!tokenValid) {
+        addLogEntry("WARN", "Google token invalid, attempting refresh");
+        const refreshed = await refreshGoogleToken();
+        if (!refreshed) {
+          setSheetError(
+            "Google認証の期限が切れています。再ログインしてください。",
+          );
+          return;
+        }
+      }
 
       // Check if user already has a Google Sheet
       const settings = await getUserSettings();
@@ -239,13 +366,20 @@ const Home = () => {
             variant: "destructive",
           });
         }
-      } catch (error) {
-        const errorMsg = `Google Sheetの作成に失敗しました: ${error instanceof Error ? error.message : "Unknown error"}`;
-        setSheetError(errorMsg);
+      } catch (error: any) {
+        const errorMessage = error?.message || "Unknown error";
+        let userFriendlyMessage = "Google Sheetの作成に失敗しました";
+
+        if (errorMessage.includes("access token")) {
+          userFriendlyMessage =
+            "Google認証の期限が切れています。再ログインしてください。";
+        }
+
+        setSheetError(userFriendlyMessage);
         addLogEntry("ERROR", "Error in Google Sheet creation flow", error);
         toast({
           title: "Google Sheetエラー",
-          description: errorMsg,
+          description: userFriendlyMessage,
           variant: "destructive",
         });
       }
@@ -256,14 +390,14 @@ const Home = () => {
   };
 
   const handleCreatePost = async (post: Omit<Post, "id" | "updatedAt">) => {
-    const newPost: Post = {
-      ...post,
-      id: Date.now().toString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    // Add to Google Sheet
     try {
+      const newPost: Post = {
+        ...post,
+        id: Date.now().toString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Add to Google Sheet with enhanced error handling
       const result = await addPostToGoogleSheet({
         ...newPost,
         platforms: newPost.channels, // Convert channels to platforms for the API
@@ -277,13 +411,48 @@ const Home = () => {
           description: "投稿がGoogle Sheetに保存されました",
         });
       } else {
-        throw new Error(result.error || "Failed to save post");
+        const errorMessage = result.error || "Failed to save post";
+
+        // Check if it's a token error and attempt refresh
+        if (
+          errorMessage.includes("access token") &&
+          !tokenRefreshAttempted.current
+        ) {
+          const refreshed = await refreshGoogleToken();
+          if (refreshed) {
+            // Retry saving the post
+            const retryResult = await addPostToGoogleSheet({
+              ...newPost,
+              platforms: newPost.channels,
+            });
+
+            if (retryResult.success) {
+              await fetchPosts();
+              toast({
+                title: "投稿作成完了",
+                description: "投稿がGoogle Sheetに保存されました",
+              });
+              setIsCreateDialogOpen(false);
+              return;
+            }
+          }
+        }
+
+        throw new Error(errorMessage);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving post:", error);
+      const errorMessage = error?.message || "Unknown error";
+
+      let userFriendlyMessage = "投稿の保存に失敗しました";
+      if (errorMessage.includes("access token")) {
+        userFriendlyMessage =
+          "Google認証の期限が切れています。設定を確認してください。";
+      }
+
       toast({
         title: "投稿保存エラー",
-        description: "投稿の保存に失敗しました",
+        description: userFriendlyMessage,
         variant: "destructive",
       });
       // Still add to local state as fallback
@@ -293,14 +462,81 @@ const Home = () => {
     setIsCreateDialogOpen(false);
   };
 
-  const handleEditPost = (post: Post) => {
-    setPosts(posts.map((p) => (p.id === post.id ? post : p)));
+  const handleEditPost = async (post: Post) => {
+    try {
+      // Update in Google Sheet
+      const result = await updatePostInGoogleSheet(post.id, {
+        content: post.content,
+        scheduleTime: post.scheduleTime,
+        status: post.status,
+      });
+
+      if (result.success) {
+        // Refresh posts from Google Sheet
+        await fetchPosts();
+        toast({
+          title: "投稿更新完了",
+          description: "投稿が正常に更新されました",
+        });
+      } else {
+        throw new Error(result.error || "Failed to update post");
+      }
+    } catch (error: any) {
+      console.error("Error updating post:", error);
+      const errorMessage = error?.message || "Unknown error";
+
+      let userFriendlyMessage = "投稿の更新に失敗しました";
+      if (errorMessage.includes("access token")) {
+        userFriendlyMessage =
+          "Google認証の期限が切れています。設定を確認してください。";
+      }
+
+      toast({
+        title: "投稿更新エラー",
+        description: userFriendlyMessage,
+        variant: "destructive",
+      });
+      // Update local state as fallback
+      setPosts(posts.map((p) => (p.id === post.id ? post : p)));
+    }
+
     setIsEditDialogOpen(false);
     setCurrentPost(null);
   };
 
-  const handleDeletePost = (id: string) => {
-    setPosts(posts.filter((post) => post.id !== id));
+  const handleDeletePost = async (id: string) => {
+    try {
+      // Soft delete in Google Sheet
+      const result = await deletePostInGoogleSheet(id);
+
+      if (result.success) {
+        // Refresh posts from Google Sheet
+        await fetchPosts();
+        toast({
+          title: "投稿削除完了",
+          description: "投稿が削除されました",
+        });
+      } else {
+        throw new Error(result.error || "Failed to delete post");
+      }
+    } catch (error: any) {
+      console.error("Error deleting post:", error);
+      const errorMessage = error?.message || "Unknown error";
+
+      let userFriendlyMessage = "投稿の削除に失敗しました";
+      if (errorMessage.includes("access token")) {
+        userFriendlyMessage =
+          "Google認証の期限が切れています。設定を確認してください。";
+      }
+
+      toast({
+        title: "投稿削除エラー",
+        description: userFriendlyMessage,
+        variant: "destructive",
+      });
+      // Remove from local state as fallback
+      setPosts(posts.filter((post) => post.id !== id));
+    }
   };
 
   const handleEditClick = (postId: string) => {
@@ -321,6 +557,8 @@ const Home = () => {
   };
 
   const handleRefresh = async () => {
+    tokenRefreshAttempted.current = false; // Reset retry flags
+    fetchRetryAttempted.current = false;
     await fetchPosts();
   };
 
@@ -424,9 +662,19 @@ const Home = () => {
       {sheetError && (
         <Card className="mb-6 border-red-200 bg-red-50">
           <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-red-800">
-              <AlertTriangle className="h-5 w-5" />
-              <p className="font-medium">{sheetError}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-red-800">
+                <AlertTriangle className="h-5 w-5" />
+                <p className="font-medium">{sheetError}</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleUserSettings}
+                className="text-red-700 border-red-300 hover:bg-red-100"
+              >
+                設定を確認
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -496,7 +744,10 @@ const Home = () => {
               initialData={currentPost}
               isEditing={true}
               onSubmit={handleEditPost}
-              onCancel={() => setIsEditDialogOpen(false)}
+              onCancel={() => {
+                setIsEditDialogOpen(false);
+                setCurrentPost(null);
+              }}
             />
           )}
         </DialogContent>
