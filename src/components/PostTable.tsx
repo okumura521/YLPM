@@ -19,18 +19,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-interface Platform {
-  name: string;
-  icon: string;
-}
-
 interface Post {
   id: string;
   content: string;
-  scheduleTime: Date;
-  platforms: Platform[];
+  scheduleTime: string;
+  platforms: string[];
   status: "pending" | "sent" | "failed";
-  updatedAt: Date;
+  updatedAt: string;
 }
 
 interface PostTableProps {
@@ -188,12 +183,14 @@ const PostTable: React.FC<PostTableProps> = ({
                         {post.content}
                       </div>
                     </TableCell>
-                    <TableCell>{post.scheduleTime.toLocaleString()}</TableCell>
+                    <TableCell>
+                      {new Date(post.scheduleTime).toLocaleString()}
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
                         {(post.platforms || []).map((platform) => (
-                          <Badge key={platform.name} variant="outline">
-                            {platform.icon} {platform.name}
+                          <Badge key={platform} variant="outline">
+                            {platform}
                           </Badge>
                         ))}
                       </div>
@@ -203,7 +200,9 @@ const PostTable: React.FC<PostTableProps> = ({
                         {post.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>{post.updatedAt.toLocaleString()}</TableCell>
+                    <TableCell>
+                      {new Date(post.updatedAt).toLocaleString()}
+                    </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -251,37 +250,27 @@ const defaultPosts: Post[] = [
     id: "1",
     content:
       "Exciting news! We just launched our new product. Check it out at our website!",
-    scheduleTime: new Date("2023-06-15T10:00:00"),
-    platforms: [
-      { name: "X", icon: "X" },
-      { name: "Facebook", icon: "FB" },
-    ],
+    scheduleTime: "2023-06-15T10:00:00",
+    platforms: ["x", "facebook"],
     status: "sent",
-    updatedAt: new Date("2023-06-15T10:01:00"),
+    updatedAt: "2023-06-15T10:01:00",
   },
   {
     id: "2",
     content:
       "Join us for our upcoming webinar on digital marketing strategies for small businesses.",
-    scheduleTime: new Date("2023-06-20T14:00:00"),
-    platforms: [
-      { name: "X", icon: "X" },
-      { name: "Instagram", icon: "IG" },
-      { name: "LinkedIn", icon: "LI" },
-    ],
+    scheduleTime: "2023-06-20T14:00:00",
+    platforms: ["x", "instagram", "linkedin"],
     status: "pending",
-    updatedAt: new Date("2023-06-14T09:30:00"),
+    updatedAt: "2023-06-14T09:30:00",
   },
   {
     id: "3",
     content: "We're hiring! Looking for talented developers to join our team.",
-    scheduleTime: new Date("2023-06-18T12:00:00"),
-    platforms: [
-      { name: "LinkedIn", icon: "LI" },
-      { name: "X", icon: "X" },
-    ],
+    scheduleTime: "2023-06-18T12:00:00",
+    platforms: ["linkedin", "x"],
     status: "failed",
-    updatedAt: new Date("2023-06-18T12:01:00"),
+    updatedAt: "2023-06-18T12:01:00",
   },
 ];
 

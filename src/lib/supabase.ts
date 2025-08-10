@@ -676,69 +676,74 @@ export const addPostToGoogleSheet = async (post: any) => {
 
     const accessToken = await getGoogleAccessToken();
 
-    // Upload image if present
-    let imageUrl = "";
-    if (post.image && settings.google_drive_folder_id) {
-      const uploadResult = await uploadImageToGoogleDrive(
-        accessToken,
-        post.image,
-        settings.google_drive_folder_id,
-      );
-      if (uploadResult.success) {
-        imageUrl = uploadResult.directUrl || "";
+    // Upload images if present
+    let imageUrls: string[] = [];
+    if (
+      post.images &&
+      post.images.length > 0 &&
+      settings.google_drive_folder_id
+    ) {
+      for (const image of post.images) {
+        const uploadResult = await uploadImageToGoogleDrive(
+          accessToken,
+          image,
+          settings.google_drive_folder_id,
+        );
+        if (uploadResult.success) {
+          imageUrls.push(uploadResult.directUrl || "");
+        }
       }
     }
 
-    // Create separate records for each platform
-    const platforms = Array.isArray(post.platforms)
-      ? post.platforms
-      : [post.platforms];
+    const imageUrl = imageUrls.join(",");
     const sheetName = encodeURIComponent("投稿データ");
 
-    for (const platform of platforms) {
-      const platformPostId = `${post.id}_${platform}`;
+    // Use the post ID directly (it should already include platform suffix)
+    const postId = post.id;
+    const platform = Array.isArray(post.platforms)
+      ? post.platforms[0]
+      : post.platforms;
 
-      const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}:append?valueInputOption=RAW`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            values: [
-              [
-                platformPostId,
-                post.content,
-                platform,
-                post.scheduleTime || new Date().toISOString(),
-                post.status || "pending",
-                imageUrl,
-                post.imagesCommaSeparated || "",
-                post.imagesJsonArray || "",
-                "FALSE", // Delete flag
-                new Date().toISOString(),
-                new Date().toISOString(),
-              ],
-            ],
-          }),
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}:append?valueInputOption=RAW`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          values: [
+            [
+              postId,
+              post.content,
+              platform,
+              post.scheduleTime || new Date().toISOString(),
+              post.status || "pending",
+              imageUrl,
+              post.imagesCommaSeparated || "",
+              post.imagesJsonArray || "",
+              "FALSE", // Delete flag
+              new Date().toISOString(),
+              new Date().toISOString(),
+            ],
+          ],
+        }),
+      },
+    );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Error adding post to sheet:", errorData);
-        addLogEntry("ERROR", "Error adding post to sheet", errorData);
-        throw new Error(
-          `Failed to add post: ${errorData.error?.message || "Unknown error"}`,
-        );
-      }
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Error adding post to sheet:", errorData);
+      addLogEntry("ERROR", "Error adding post to sheet", errorData);
+      throw new Error(
+        `Failed to add post: ${errorData.error?.message || "Unknown error"}`,
+      );
     }
 
     addLogEntry("INFO", "Post added to Google Sheet successfully", {
-      postId: post.id,
-      platforms: platforms,
+      postId: postId,
+      platform: platform,
       imageUrl,
     });
     return { success: true };
@@ -885,30 +890,34 @@ export const fetchPostsFromGoogleSheet = async () => {
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       const fullId = row[0] || `sheet-${i}`;
-      const isDeleted = row[6] === "TRUE";
+      const isDeleted = row[8] === "TRUE"; // Fixed: delete flag is at index 8
 
       if (isDeleted) continue; // Skip soft deleted posts
 
       // Extract base post ID (remove platform suffix)
       const baseId = fullId.includes("_") ? fullId.split("_")[0] : fullId;
-      const platform = fullId.includes("_") ? fullId.split("_")[1] : row[2];
+      const platform = row[2]; // Platform is always in column 2
 
       if (!postsMap.has(baseId)) {
+        // Convert UTC time to JST for display
+        const utcTime = new Date(row[3] || new Date().toISOString());
+        const jstTime = new Date(utcTime.getTime() + 9 * 60 * 60 * 1000);
+
         postsMap.set(baseId, {
           id: baseId,
           content: row[1] || "",
-          channels: [],
-          scheduleTime: row[3] || new Date().toISOString(),
+          platforms: [], // Use platforms instead of channels
+          scheduleTime: jstTime.toISOString(),
           status: (row[4] as "pending" | "sent" | "failed") || "pending",
           imageUrl: row[5] || "",
-          updatedAt: row[8] || row[7] || new Date().toISOString(),
+          updatedAt: row[10] || row[9] || new Date().toISOString(), // Updated at is at index 10
         });
       }
 
-      // Add platform to channels if not already present
+      // Add platform to platforms if not already present
       const post = postsMap.get(baseId);
-      if (platform && !post.channels.includes(platform)) {
-        post.channels.push(platform);
+      if (platform && !post.platforms.includes(platform)) {
+        post.platforms.push(platform);
       }
     }
 

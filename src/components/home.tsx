@@ -52,7 +52,8 @@ interface Post {
   id: string;
   content: string;
   scheduleTime: string;
-  channels: string[];
+  platforms: string[];
+  channels?: string[];
   status: "pending" | "sent" | "failed";
   updatedAt: string;
   imageUrl?: string;
@@ -400,7 +401,7 @@ const Home = () => {
       // Add to Google Sheet with enhanced error handling
       const result = await addPostToGoogleSheet({
         ...newPost,
-        platforms: newPost.channels, // Convert channels to platforms for the API
+        platforms: newPost.platforms, // Use platforms directly
       });
 
       if (result.success) {
@@ -423,7 +424,7 @@ const Home = () => {
             // Retry saving the post
             const retryResult = await addPostToGoogleSheet({
               ...newPost,
-              platforms: newPost.channels,
+              platforms: newPost.platforms,
             });
 
             if (retryResult.success) {
@@ -545,7 +546,8 @@ const Home = () => {
       // Convert the post data to match PostForm expectations
       const postForEdit = {
         ...post,
-        platforms: post.channels || [],
+        platforms: post.platforms || [],
+        channels: post.platforms || [],
         scheduleTime: post.scheduleTime
           ? new Date(post.scheduleTime)
           : undefined,

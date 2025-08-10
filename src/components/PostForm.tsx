@@ -288,6 +288,9 @@ const PostForm: React.FC<PostFormProps> = ({
     const imagesCommaSeparated = imageNames.join(",");
     const imagesJsonArray = JSON.stringify(imageNames);
 
+    // Generate a single base ID for all platforms
+    const baseId = initData.id || Date.now().toString();
+
     // Submit posts for each platform individually
     for (const platform of selectedPlatforms) {
       let scheduledDateTime: Date | undefined;
@@ -298,11 +301,19 @@ const PostForm: React.FC<PostFormProps> = ({
         platformSchedule.date &&
         platformSchedule.time
       ) {
-        scheduledDateTime = new Date(
+        // Convert to Japan time (JST)
+        const localDateTime = new Date(
           `${platformSchedule.date}T${platformSchedule.time}`,
         );
+        scheduledDateTime = new Date(
+          localDateTime.getTime() - 9 * 60 * 60 * 1000,
+        ); // Convert JST to UTC
       } else if (isScheduled && scheduleDate && scheduleTime) {
-        scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+        // Convert to Japan time (JST)
+        const localDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+        scheduledDateTime = new Date(
+          localDateTime.getTime() - 9 * 60 * 60 * 1000,
+        ); // Convert JST to UTC
       }
 
       const postData: PostData = {
@@ -318,13 +329,8 @@ const PostForm: React.FC<PostFormProps> = ({
         imagesCommaSeparated,
         imagesJsonArray,
         status: "pending",
+        id: `${baseId}_${platform}`, // Use consistent ID format
       };
-
-      if (initData.id) {
-        postData.id = `${initData.id}_${platform}`;
-      } else {
-        postData.id = `${Date.now()}_${platform}`;
-      }
 
       addLogEntry("INFO", "Submitting post for platform", {
         platform,

@@ -33,13 +33,28 @@ import {
 } from "@/lib/supabase";
 
 const AI_MODELS = {
-  OpenAI: ["gpt-3.5-turbo", "gpt-4"],
-  Anthropic: ["claude-2", "claude-instant"],
-  Gemini: [
-    "Gemini 2.5 Pro",
-    "Gemini 2.5 Flash",
-    "Gemini 2.0 Pro",
-    "Gemini 1.5 Pro",
+  OpenAI: [
+    "gpt-3.5-turbo",
+    "gpt-4",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-5",
+    "gpt-5-mini",
+  ],
+  Anthropic: [
+    "claude-2",
+    "claude-instant",
+    "claude-3-5-sonnet",
+    "claude-4-sonnet",
+    "claude-4-opus",
+    "claude-4.1-opus",
+  ],
+  Google: [
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.0-pro",
+    "gemini-2.0-flash",
+    "gemini-1.5-pro",
   ],
 };
 
@@ -275,7 +290,7 @@ export default function UserSettingsPage() {
                 <SelectContent>
                   <SelectItem value="OpenAI">OpenAI</SelectItem>
                   <SelectItem value="Anthropic">Anthropic</SelectItem>
-                  <SelectItem value="Gemini">Gemini</SelectItem>
+                  <SelectItem value="Google">Google</SelectItem>
                 </SelectContent>
               </Select>
             </div>
