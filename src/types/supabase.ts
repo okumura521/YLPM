@@ -26,6 +26,8 @@ export type Database = {
           google_drive_folder_id: string | null;
           google_drive_folder_name: string | null;
           google_drive_folder_url: string | null;
+          images_comma_separated: string | null;
+          images_json_array: string | null;
           id: string;
           updated_at: string | null;
           user_id: string | null;
@@ -41,6 +43,8 @@ export type Database = {
           google_drive_folder_id?: string | null;
           google_drive_folder_name?: string | null;
           google_drive_folder_url?: string | null;
+          images_comma_separated?: string | null;
+          images_json_array?: string | null;
           id?: string;
           updated_at?: string | null;
           user_id?: string | null;
@@ -56,6 +60,8 @@ export type Database = {
           google_drive_folder_id?: string | null;
           google_drive_folder_name?: string | null;
           google_drive_folder_url?: string | null;
+          images_comma_separated?: string | null;
+          images_json_array?: string | null;
           id?: string;
           updated_at?: string | null;
           user_id?: string | null;

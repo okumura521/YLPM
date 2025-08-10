@@ -232,6 +232,14 @@ export default function UserSettingsPage() {
                     </div>
                   </div>
                 )}
+                {!googleDriveFolderUrl && googleSheetUrl && (
+                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-800">
+                      Google
+                      Drive画像フォルダが設定されていません。再ログインすると自動的に作成されます。
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">

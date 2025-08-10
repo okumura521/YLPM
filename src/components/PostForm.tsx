@@ -54,6 +54,15 @@ interface PostData {
   channels?: string[];
   isScheduled: boolean;
   image?: File | null;
+  images?: File[];
+  platformContent?: Record<string, string>;
+  platformImages?: Record<string, File[]>;
+  platformSchedules?: Record<
+    string,
+    { date: string; time: string; enabled: boolean }
+  >;
+  imagesCommaSeparated?: string;
+  imagesJsonArray?: string;
   status?: string;
 }
 
@@ -88,6 +97,17 @@ const PostForm: React.FC<PostFormProps> = ({
   const [isGeneratingDraft, setIsGeneratingDraft] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [platformContent, setPlatformContent] = useState<
+    Record<string, string>
+  >({});
+  const [platformImages, setPlatformImages] = useState<Record<string, File[]>>(
+    {},
+  );
+  const [platformSchedules, setPlatformSchedules] = useState<
+    Record<string, { date: string; time: string; enabled: boolean }>
+  >({});
   const [generatedContent, setGeneratedContent] = useState<
     Record<string, string>
   >({});
@@ -133,15 +153,64 @@ const PostForm: React.FC<PostFormProps> = ({
   };
 
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedImage(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+    const files = Array.from(event.target.files || []);
+    if (files.length > 0) {
+      setSelectedImages((prev) => [...prev, ...files]);
+
+      files.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setImagePreviews((prev) => [...prev, e.target?.result as string]);
+        };
+        reader.readAsDataURL(file);
+      });
     }
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+    setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const toggleImageForPlatform = (imageIndex: number, platform: string) => {
+    setPlatformImages((prev) => {
+      const current = prev[platform] || [];
+      const image = selectedImages[imageIndex];
+      const exists = current.some((img) => img.name === image.name);
+
+      if (exists) {
+        return {
+          ...prev,
+          [platform]: current.filter((img) => img.name !== image.name),
+        };
+      } else {
+        return {
+          ...prev,
+          [platform]: [...current, image],
+        };
+      }
+    });
+  };
+
+  const updatePlatformContent = (platform: string, content: string) => {
+    setPlatformContent((prev) => ({
+      ...prev,
+      [platform]: content,
+    }));
+  };
+
+  const updatePlatformSchedule = (
+    platform: string,
+    field: string,
+    value: string | boolean,
+  ) => {
+    setPlatformSchedules((prev) => ({
+      ...prev,
+      [platform]: {
+        ...prev[platform],
+        [field]: value,
+      },
+    }));
   };
 
   const generateAIDraft = async () => {
@@ -214,66 +283,94 @@ const PostForm: React.FC<PostFormProps> = ({
   const handleFormSubmit = async () => {
     if (!validateContent()) return;
 
-    let scheduledDateTime: Date | undefined;
-    if (isScheduled && scheduleDate && scheduleTime) {
-      scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-    }
+    // Generate images data
+    const imageNames = selectedImages.map((img) => img.name);
+    const imagesCommaSeparated = imageNames.join(",");
+    const imagesJsonArray = JSON.stringify(imageNames);
 
-    const postData: PostData = {
-      content,
-      platforms: selectedPlatforms,
-      channels: selectedPlatforms, // For compatibility
-      isScheduled,
-      scheduleTime: scheduledDateTime,
-      image: selectedImage,
-      status: "pending",
-    };
+    // Submit posts for each platform individually
+    for (const platform of selectedPlatforms) {
+      let scheduledDateTime: Date | undefined;
+      const platformSchedule = platformSchedules[platform];
 
-    if (initData.id) {
-      postData.id = initData.id;
-    } else {
-      postData.id = Date.now().toString();
-    }
-
-    addLogEntry("INFO", "Submitting post", postData);
-
-    try {
-      // Add to Google Sheets if not editing
-      if (!isEditing) {
-        const sheetResult = await addPostToGoogleSheet(postData);
-        if (!sheetResult.success) {
-          addLogEntry(
-            "ERROR",
-            "Failed to add post to Google Sheet",
-            sheetResult,
-          );
-          toast({
-            title: "Google Sheetエラー",
-            description: `投稿の保存に失敗しました: ${sheetResult.error}`,
-            variant: "destructive",
-          });
-          return;
-        }
-        addLogEntry("INFO", "Post added to Google Sheet successfully");
+      if (
+        platformSchedule?.enabled &&
+        platformSchedule.date &&
+        platformSchedule.time
+      ) {
+        scheduledDateTime = new Date(
+          `${platformSchedule.date}T${platformSchedule.time}`,
+        );
+      } else if (isScheduled && scheduleDate && scheduleTime) {
+        scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
       }
 
-      onSubmit(postData);
+      const postData: PostData = {
+        content: platformContent[platform] || content,
+        platforms: [platform], // Single platform per post
+        channels: [platform],
+        isScheduled: platformSchedule?.enabled || isScheduled,
+        scheduleTime: scheduledDateTime,
+        images: platformImages[platform] || selectedImages,
+        platformContent,
+        platformImages,
+        platformSchedules,
+        imagesCommaSeparated,
+        imagesJsonArray,
+        status: "pending",
+      };
 
-      toast({
-        title: isEditing ? "投稿更新完了" : "投稿作成完了",
-        description: isEditing
-          ? "投稿が正常に更新されました"
-          : "投稿が正常に作成されました",
+      if (initData.id) {
+        postData.id = `${initData.id}_${platform}`;
+      } else {
+        postData.id = `${Date.now()}_${platform}`;
+      }
+
+      addLogEntry("INFO", "Submitting post for platform", {
+        platform,
+        postData,
       });
-    } catch (error) {
-      console.error("Failed to submit post:", error);
-      addLogEntry("ERROR", "Failed to submit post", error);
-      toast({
-        title: "投稿エラー",
-        description: "投稿の処理に失敗しました",
-        variant: "destructive",
-      });
+
+      try {
+        // Add to Google Sheets if not editing
+        if (!isEditing) {
+          const sheetResult = await addPostToGoogleSheet(postData);
+          if (!sheetResult.success) {
+            addLogEntry(
+              "ERROR",
+              "Failed to add post to Google Sheet",
+              sheetResult,
+            );
+            toast({
+              title: "Google Sheetエラー",
+              description: `${platform}の投稿保存に失敗しました: ${sheetResult.error}`,
+              variant: "destructive",
+            });
+            continue;
+          }
+          addLogEntry("INFO", "Post added to Google Sheet successfully", {
+            platform,
+          });
+        }
+
+        onSubmit(postData);
+      } catch (error) {
+        console.error(`Failed to submit post for ${platform}:`, error);
+        addLogEntry("ERROR", "Failed to submit post", { platform, error });
+        toast({
+          title: "投稿エラー",
+          description: `${platform}の投稿処理に失敗しました`,
+          variant: "destructive",
+        });
+      }
     }
+
+    toast({
+      title: isEditing ? "投稿更新完了" : "投稿作成完了",
+      description: isEditing
+        ? "投稿が正常に更新されました"
+        : "投稿が正常に作成されました",
+    });
   };
 
   // Validate content on change for Manual Entry tab
@@ -330,7 +427,7 @@ const PostForm: React.FC<PostFormProps> = ({
                 />
               </div>
 
-              {/* 4. Select Image */}
+              {/* 4. Select Images */}
               <div className="space-y-2">
                 <Label htmlFor="image-select">4. 画像を選択</Label>
                 <div className="flex items-center gap-4">
@@ -341,34 +438,187 @@ const PostForm: React.FC<PostFormProps> = ({
                       document.getElementById("image-input")?.click()
                     }
                   >
-                    <Image className="mr-2 h-4 w-4" />
-                    Select Image
+                    <Image className="mr-2 h-4 w-4" />+ 画像追加
                   </Button>
                   <input
                     id="image-input"
                     type="file"
                     accept="image/*"
+                    multiple
                     onChange={handleImageSelect}
                     className="hidden"
                   />
-                  {selectedImage && (
+                  {selectedImages.length > 0 && (
                     <span className="text-sm text-muted-foreground">
-                      {selectedImage.name}
+                      {selectedImages.length}枚選択済み
                     </span>
                   )}
                 </div>
-                {imagePreview && (
-                  <div className="mt-2">
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="max-w-xs max-h-32 object-cover rounded-md"
-                    />
+                {imagePreviews.length > 0 && (
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {imagePreviews.map((preview, index) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={preview}
+                          alt={`Preview ${index + 1}`}
+                          className="w-full h-20 object-cover rounded-md"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="absolute top-1 right-1 h-6 w-6 p-0"
+                          onClick={() => removeImage(index)}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
 
-              {/* 5. Generate Draft Button */}
+              {/* 5. Platform-specific Content and Settings */}
+              {selectedPlatforms.length > 0 && (
+                <div className="space-y-4">
+                  <Label className="text-base font-medium">
+                    5. プラットフォーム別設定
+                  </Label>
+                  {selectedPlatforms.map((platform) => {
+                    const validation =
+                      platformValidations[
+                        platform as keyof typeof platformValidations
+                      ];
+                    const platformContentValue =
+                      platformContent[platform] || content;
+                    const platformSchedule = platformSchedules[platform] || {
+                      date: "",
+                      time: "",
+                      enabled: false,
+                    };
+
+                    return (
+                      <Card key={platform} className="p-4">
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center">
+                            <Badge variant="outline">
+                              {validation?.name || platform}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {platformContentValue.length}/
+                              {validation?.maxLength || "∞"} 文字
+                            </span>
+                          </div>
+
+                          {/* Platform-specific content */}
+                          <div className="space-y-2">
+                            <Label>投稿内容</Label>
+                            <Textarea
+                              placeholder={`${validation?.name || platform}用の投稿内容`}
+                              value={platformContentValue}
+                              onChange={(e) =>
+                                updatePlatformContent(platform, e.target.value)
+                              }
+                              className="min-h-[100px]"
+                            />
+                          </div>
+
+                          {/* Image selection for platform */}
+                          {selectedImages.length > 0 && (
+                            <div className="space-y-2">
+                              <Label>使用する画像</Label>
+                              <div className="grid grid-cols-4 gap-2">
+                                {selectedImages.map((image, index) => {
+                                  const isSelected =
+                                    platformImages[platform]?.some(
+                                      (img) => img.name === image.name,
+                                    ) || false;
+                                  return (
+                                    <div key={index} className="relative">
+                                      <img
+                                        src={imagePreviews[index]}
+                                        alt={`Image ${index + 1}`}
+                                        className={`w-full h-16 object-cover rounded-md cursor-pointer border-2 ${
+                                          isSelected
+                                            ? "border-primary"
+                                            : "border-gray-200"
+                                        }`}
+                                        onClick={() =>
+                                          toggleImageForPlatform(
+                                            index,
+                                            platform,
+                                          )
+                                        }
+                                      />
+                                      {isSelected && (
+                                        <div className="absolute top-1 right-1 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
+                                          ✓
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Platform-specific schedule */}
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                checked={platformSchedule.enabled}
+                                onCheckedChange={(checked) =>
+                                  updatePlatformSchedule(
+                                    platform,
+                                    "enabled",
+                                    checked,
+                                  )
+                                }
+                              />
+                              <Label>個別スケジュール設定</Label>
+                            </div>
+
+                            {platformSchedule.enabled && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label>日付</Label>
+                                  <Input
+                                    type="date"
+                                    value={platformSchedule.date}
+                                    onChange={(e) =>
+                                      updatePlatformSchedule(
+                                        platform,
+                                        "date",
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                </div>
+                                <div>
+                                  <Label>時刻</Label>
+                                  <Input
+                                    type="time"
+                                    value={platformSchedule.time}
+                                    onChange={(e) =>
+                                      updatePlatformSchedule(
+                                        platform,
+                                        "time",
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 6. Generate Draft Button */}
               <div className="space-y-4">
                 <Button
                   type="button"
@@ -399,7 +649,7 @@ const PostForm: React.FC<PostFormProps> = ({
                   ) : (
                     <>
                       <Sparkles size={16} className="mr-2" />
-                      5. Generate Draft
+                      6. Generate Draft
                     </>
                   )}
                 </Button>
@@ -461,7 +711,7 @@ const PostForm: React.FC<PostFormProps> = ({
                 />
               </div>
 
-              {/* 3. Select Image */}
+              {/* 3. Select Images */}
               <div className="space-y-2">
                 <Label htmlFor="manual-image-select">3. 画像を選択</Label>
                 <div className="flex items-center gap-4">
@@ -472,32 +722,185 @@ const PostForm: React.FC<PostFormProps> = ({
                       document.getElementById("manual-image-input")?.click()
                     }
                   >
-                    <Image className="mr-2 h-4 w-4" />
-                    Select Image
+                    <Image className="mr-2 h-4 w-4" />+ 画像追加
                   </Button>
                   <input
                     id="manual-image-input"
                     type="file"
                     accept="image/*"
+                    multiple
                     onChange={handleImageSelect}
                     className="hidden"
                   />
-                  {selectedImage && (
+                  {selectedImages.length > 0 && (
                     <span className="text-sm text-muted-foreground">
-                      {selectedImage.name}
+                      {selectedImages.length}枚選択済み
                     </span>
                   )}
                 </div>
-                {imagePreview && (
-                  <div className="mt-2">
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="max-w-xs max-h-32 object-cover rounded-md"
-                    />
+                {imagePreviews.length > 0 && (
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {imagePreviews.map((preview, index) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={preview}
+                          alt={`Preview ${index + 1}`}
+                          className="w-full h-20 object-cover rounded-md"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="absolute top-1 right-1 h-6 w-6 p-0"
+                          onClick={() => removeImage(index)}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
+
+              {/* 4. Platform-specific Content and Settings */}
+              {selectedPlatforms.length > 0 && (
+                <div className="space-y-4">
+                  <Label className="text-base font-medium">
+                    4. プラットフォーム別設定
+                  </Label>
+                  {selectedPlatforms.map((platform) => {
+                    const validation =
+                      platformValidations[
+                        platform as keyof typeof platformValidations
+                      ];
+                    const platformContentValue =
+                      platformContent[platform] || content;
+                    const platformSchedule = platformSchedules[platform] || {
+                      date: "",
+                      time: "",
+                      enabled: false,
+                    };
+
+                    return (
+                      <Card key={platform} className="p-4">
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center">
+                            <Badge variant="outline">
+                              {validation?.name || platform}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {platformContentValue.length}/
+                              {validation?.maxLength || "∞"} 文字
+                            </span>
+                          </div>
+
+                          {/* Platform-specific content */}
+                          <div className="space-y-2">
+                            <Label>投稿内容</Label>
+                            <Textarea
+                              placeholder={`${validation?.name || platform}用の投稿内容`}
+                              value={platformContentValue}
+                              onChange={(e) =>
+                                updatePlatformContent(platform, e.target.value)
+                              }
+                              className="min-h-[100px]"
+                            />
+                          </div>
+
+                          {/* Image selection for platform */}
+                          {selectedImages.length > 0 && (
+                            <div className="space-y-2">
+                              <Label>使用する画像</Label>
+                              <div className="grid grid-cols-4 gap-2">
+                                {selectedImages.map((image, index) => {
+                                  const isSelected =
+                                    platformImages[platform]?.some(
+                                      (img) => img.name === image.name,
+                                    ) || false;
+                                  return (
+                                    <div key={index} className="relative">
+                                      <img
+                                        src={imagePreviews[index]}
+                                        alt={`Image ${index + 1}`}
+                                        className={`w-full h-16 object-cover rounded-md cursor-pointer border-2 ${
+                                          isSelected
+                                            ? "border-primary"
+                                            : "border-gray-200"
+                                        }`}
+                                        onClick={() =>
+                                          toggleImageForPlatform(
+                                            index,
+                                            platform,
+                                          )
+                                        }
+                                      />
+                                      {isSelected && (
+                                        <div className="absolute top-1 right-1 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
+                                          ✓
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Platform-specific schedule */}
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                checked={platformSchedule.enabled}
+                                onCheckedChange={(checked) =>
+                                  updatePlatformSchedule(
+                                    platform,
+                                    "enabled",
+                                    checked,
+                                  )
+                                }
+                              />
+                              <Label>個別スケジュール設定</Label>
+                            </div>
+
+                            {platformSchedule.enabled && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label>日付</Label>
+                                  <Input
+                                    type="date"
+                                    value={platformSchedule.date}
+                                    onChange={(e) =>
+                                      updatePlatformSchedule(
+                                        platform,
+                                        "date",
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                </div>
+                                <div>
+                                  <Label>時刻</Label>
+                                  <Input
+                                    type="time"
+                                    value={platformSchedule.time}
+                                    onChange={(e) =>
+                                      updatePlatformSchedule(
+                                        platform,
+                                        "time",
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Validation Alerts */}
               {hasValidationErrors && (
