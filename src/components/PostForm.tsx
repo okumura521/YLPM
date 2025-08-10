@@ -35,8 +35,14 @@ import {
 
 // Import PlatformSelector directly
 import PlatformSelector from "./PlatformSelector";
-import { addPostToGoogleSheet, addLogEntry } from "@/lib/supabase";
+import {
+  addPostToGoogleSheet,
+  addLogEntry,
+  getUserSettings,
+} from "@/lib/supabase";
+import { callAI, buildPrompt } from "@/lib/aiProviders";
 import { useToast } from "@/components/ui/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface PostFormProps {
   initialData?: PostData;
@@ -74,6 +80,7 @@ const PostForm: React.FC<PostFormProps> = ({
   isEditing = false,
 }) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   // Initialize from post prop or initialData or defaults
   const initData = post ||
     initialData || {
@@ -114,6 +121,9 @@ const PostForm: React.FC<PostFormProps> = ({
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string[]>
   >({});
+  const [aiSettings, setAiSettings] = useState<any>(null);
+  const [aiConfigured, setAiConfigured] = useState<boolean>(false);
+  const [loadingAiSettings, setLoadingAiSettings] = useState<boolean>(true);
 
   const {
     register,
@@ -122,6 +132,35 @@ const PostForm: React.FC<PostFormProps> = ({
   } = useForm<PostData>({
     defaultValues: initialData,
   });
+
+  // Load AI settings on component mount
+  React.useEffect(() => {
+    const loadAiSettings = async () => {
+      try {
+        setLoadingAiSettings(true);
+        const settings = await getUserSettings();
+        setAiSettings(settings);
+
+        // Check if AI is properly configured
+        const isConfigured = !!(
+          settings?.ai_service &&
+          settings?.ai_model &&
+          settings?.ai_api_token &&
+          settings?.ai_connection_status
+        );
+        setAiConfigured(isConfigured);
+
+        addLogEntry("INFO", "AI settings loaded", { isConfigured, settings });
+      } catch (error) {
+        addLogEntry("ERROR", "Failed to load AI settings", error);
+        setAiConfigured(false);
+      } finally {
+        setLoadingAiSettings(false);
+      }
+    };
+
+    loadAiSettings();
+  }, []);
 
   // Platform-specific validation rules
   const platformValidations = {
@@ -215,6 +254,21 @@ const PostForm: React.FC<PostFormProps> = ({
 
   const generateAIDraft = async () => {
     if (!content || !aiPrompt || selectedPlatforms.length === 0) {
+      toast({
+        title: "入力エラー",
+        description:
+          "投稿内容、AI指示、プラットフォームをすべて入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!aiConfigured) {
+      toast({
+        title: "AI設定エラー",
+        description: "AI機能を使用するには設定が必要です",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -223,45 +277,53 @@ const PostForm: React.FC<PostFormProps> = ({
       content,
       aiPrompt,
       platforms: selectedPlatforms,
+      aiSettings: {
+        service: aiSettings?.ai_service,
+        model: aiSettings?.ai_model,
+        hasToken: !!aiSettings?.ai_api_token,
+      },
     });
 
     try {
-      // In a real implementation, this would call the actual AI API
-      // For now, we'll simulate the API call with more realistic behavior
+      // Build the prompt for AI
+      const prompt = buildPrompt(
+        content,
+        aiPrompt,
+        selectedPlatforms,
+        platformValidations,
+      );
 
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      const generated: Record<string, string> = {};
-
-      selectedPlatforms.forEach((platform) => {
-        const validation =
-          platformValidations[platform as keyof typeof platformValidations];
-        if (validation) {
-          // Generate platform-specific content based on character limits
-          let platformContent = content;
-          if (aiPrompt.includes("短く") || aiPrompt.includes("要約")) {
-            platformContent = content.substring(
-              0,
-              Math.min(validation.maxLength * 0.8, content.length),
-            );
-          } else if (aiPrompt.includes("詳しく") || aiPrompt.includes("詳細")) {
-            platformContent =
-              content + "\n\n詳細はプロフィールリンクから確認してください。";
-          }
-
-          // Ensure it fits within platform limits
-          if (platformContent.length > validation.maxLength) {
-            platformContent =
-              platformContent.substring(0, validation.maxLength - 3) + "...";
-          }
-
-          generated[platform] = platformContent;
-        }
+      // Call AI API
+      const aiResponse = await callAI(prompt, {
+        service: aiSettings.ai_service,
+        model: aiSettings.ai_model,
+        apiToken: aiSettings.ai_api_token,
       });
 
-      setGeneratedContent(generated);
-      addLogEntry("INFO", "AI draft generation completed", { generated });
+      if (!aiResponse.success) {
+        throw new Error(aiResponse.error || "AI API呼び出しに失敗しました");
+      }
+
+      if (!aiResponse.content) {
+        throw new Error("AIからの応答が空です");
+      }
+
+      // Set the generated content
+      setGeneratedContent(aiResponse.content);
+
+      // Also update platform content with generated content
+      const newPlatformContent = { ...platformContent };
+      Object.entries(aiResponse.content).forEach(([platform, content]) => {
+        if (selectedPlatforms.includes(platform)) {
+          newPlatformContent[platform] = content as string;
+        }
+      });
+      setPlatformContent(newPlatformContent);
+
+      addLogEntry("INFO", "AI draft generation completed", {
+        generated: aiResponse.content,
+        platformsUpdated: Object.keys(aiResponse.content),
+      });
 
       toast({
         title: "AI生成完了",
@@ -270,9 +332,25 @@ const PostForm: React.FC<PostFormProps> = ({
     } catch (error) {
       console.error("AI draft generation failed:", error);
       addLogEntry("ERROR", "AI draft generation failed", error);
+
+      let errorMessage = "コンテンツの生成に失敗しました";
+      if (error instanceof Error) {
+        if (error.message.includes("APIキー")) {
+          errorMessage = "APIキーが無効です。設定を確認してください。";
+        } else if (error.message.includes("レート制限")) {
+          errorMessage =
+            "レート制限に達しました。しばらく待ってから再試行してください。";
+        } else if (error.message.includes("ネットワーク")) {
+          errorMessage =
+            "ネットワークエラーが発生しました。接続を確認してください。";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
       toast({
         title: "AI生成エラー",
-        description: "コンテンツの生成に失敗しました",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -288,10 +366,57 @@ const PostForm: React.FC<PostFormProps> = ({
     const imagesCommaSeparated = imageNames.join(",");
     const imagesJsonArray = JSON.stringify(imageNames);
 
-    // Generate a single base ID for all platforms
-    const baseId = initData.id || Date.now().toString();
+    // Generate a single base ID for all platforms - fix the duplicate issue
+    let baseId: string;
+    if (isEditing && initData.id) {
+      // For editing, extract base ID if it has platform suffix
+      baseId = initData.id.includes("_")
+        ? initData.id.split("_")[0]
+        : initData.id;
+    } else {
+      // For new posts, generate new base ID
+      baseId = Date.now().toString();
+    }
 
-    // Submit posts for each platform individually
+    addLogEntry("INFO", "Starting form submission", {
+      baseId,
+      isEditing,
+      selectedPlatforms,
+      originalId: initData.id,
+    });
+
+    // For editing, submit as a single post with all platforms
+    if (isEditing) {
+      let scheduledDateTime: Date | undefined;
+      if (isScheduled && scheduleDate && scheduleTime) {
+        const localDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+        scheduledDateTime = new Date(
+          localDateTime.getTime() - 9 * 60 * 60 * 1000,
+        ); // Convert JST to UTC
+      }
+
+      const postData: PostData = {
+        content: content,
+        platforms: selectedPlatforms,
+        channels: selectedPlatforms,
+        isScheduled: isScheduled,
+        scheduleTime: scheduledDateTime,
+        images: selectedImages,
+        platformContent,
+        platformImages,
+        platformSchedules,
+        imagesCommaSeparated,
+        imagesJsonArray,
+        status: "pending",
+        id: baseId, // Use base ID for editing
+      };
+
+      addLogEntry("INFO", "Submitting edited post", { postData });
+      onSubmit(postData);
+      return;
+    }
+
+    // For new posts, submit for each platform individually
     for (const platform of selectedPlatforms) {
       let scheduledDateTime: Date | undefined;
       const platformSchedule = platformSchedules[platform];
@@ -329,37 +454,21 @@ const PostForm: React.FC<PostFormProps> = ({
         imagesCommaSeparated,
         imagesJsonArray,
         status: "pending",
-        id: `${baseId}_${platform}`, // Use consistent ID format
+        id: `${baseId}_${platform}`, // Use consistent ID format with platform suffix
       };
 
       addLogEntry("INFO", "Submitting post for platform", {
         platform,
-        postData,
+        postId: postData.id,
+        baseId,
       });
 
       try {
-        // Add to Google Sheets if not editing
-        if (!isEditing) {
-          const sheetResult = await addPostToGoogleSheet(postData);
-          if (!sheetResult.success) {
-            addLogEntry(
-              "ERROR",
-              "Failed to add post to Google Sheet",
-              sheetResult,
-            );
-            toast({
-              title: "Google Sheetエラー",
-              description: `${platform}の投稿保存に失敗しました: ${sheetResult.error}`,
-              variant: "destructive",
-            });
-            continue;
-          }
-          addLogEntry("INFO", "Post added to Google Sheet successfully", {
-            platform,
-          });
-        }
-
-        onSubmit(postData);
+        await onSubmit(postData);
+        addLogEntry("INFO", "Post submitted successfully", {
+          platform,
+          postId: postData.id,
+        });
       } catch (error) {
         console.error(`Failed to submit post for ${platform}:`, error);
         addLogEntry("ERROR", "Failed to submit post", { platform, error });
@@ -368,6 +477,7 @@ const PostForm: React.FC<PostFormProps> = ({
           description: `${platform}の投稿処理に失敗しました`,
           variant: "destructive",
         });
+        continue; // Continue with other platforms even if one fails
       }
     }
 
@@ -391,9 +501,73 @@ const PostForm: React.FC<PostFormProps> = ({
   return (
     <div className="w-full bg-white">
       <div className="space-y-6">
+        {/* AI Settings Status */}
+        {loadingAiSettings ? (
+          <Card className="p-4">
+            <div className="flex items-center justify-center">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{
+                  duration: 1,
+                  repeat: Infinity,
+                  ease: "linear",
+                }}
+                className="mr-2"
+              >
+                <Clock size={16} />
+              </motion.div>
+              AI設定を読み込み中...
+            </div>
+          </Card>
+        ) : !aiConfigured ? (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>AI機能使用にはAI設定が必要です</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/settings")}
+                className="ml-4"
+              >
+                設定ページへ
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <Card className="p-4 bg-green-50 border-green-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span className="font-medium text-green-800">AI設定済み</span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/settings")}
+                className="text-green-700 border-green-300 hover:bg-green-100"
+              >
+                設定変更
+              </Button>
+            </div>
+            <div className="mt-2 text-sm text-green-700">
+              <p>サービス: {aiSettings?.ai_service}</p>
+              <p>モデル: {aiSettings?.ai_model}</p>
+              <p>
+                接続状態:{" "}
+                {aiSettings?.ai_connection_status
+                  ? "✓ 接続確認済み"
+                  : "⚠ 未確認"}
+              </p>
+            </div>
+          </Card>
+        )}
+
         <Tabs defaultValue="ai" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="ai">AI Assistance</TabsTrigger>
+            <TabsTrigger value="ai" disabled={!aiConfigured}>
+              AI Assistance
+            </TabsTrigger>
             <TabsTrigger value="manual">Manual Entry</TabsTrigger>
           </TabsList>
 
@@ -633,7 +807,8 @@ const PostForm: React.FC<PostFormProps> = ({
                     isGeneratingDraft ||
                     !content ||
                     !aiPrompt ||
-                    selectedPlatforms.length === 0
+                    selectedPlatforms.length === 0 ||
+                    !aiConfigured
                   }
                   className="w-full"
                 >
