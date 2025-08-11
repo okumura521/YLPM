@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, CheckCircle, XCircle, FileSpreadsheet } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Sheet } from "lucide-react";
 import {
   getUserSettings,
   getGoogleAccessToken,
@@ -215,7 +215,7 @@ export default function GoogleSheetsCreationPage() {
                         rel="noopener noreferrer"
                         className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
                       >
-                        <FileSpreadsheet className="h-4 w-4" />
+                        <Sheet className="h-4 w-4" />
                         {settings.google_sheet_url}
                       </a>
                     </div>
@@ -238,7 +238,7 @@ export default function GoogleSheetsCreationPage() {
                         rel="noopener noreferrer"
                         className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
                       >
-                        <FileSpreadsheet className="h-4 w-4" />
+                        <Sheet className="h-4 w-4" />
                         {settings.google_drive_folder_url}
                       </a>
                     </div>
@@ -310,7 +310,7 @@ export default function GoogleSheetsCreationPage() {
                 size="lg"
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                <Sheet className="mr-2 h-4 w-4" />
                 Google Sheet を作成
               </Button>
 
@@ -321,7 +321,7 @@ export default function GoogleSheetsCreationPage() {
                 className="w-full"
                 size="lg"
               >
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                <Sheet className="mr-2 h-4 w-4" />
                 シート変更
               </Button>
             </div>
@@ -335,7 +335,7 @@ export default function GoogleSheetsCreationPage() {
                 size="lg"
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                <Sheet className="mr-2 h-4 w-4" />
                 新規フォルダ作成
               </Button>
 
@@ -346,7 +346,7 @@ export default function GoogleSheetsCreationPage() {
                 className="w-full"
                 size="lg"
               >
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                <Sheet className="mr-2 h-4 w-4" />
                 フォルダ変更
               </Button>
             </div>
