@@ -69,7 +69,7 @@ interface PostData {
   >;
   imagesCommaSeparated?: string;
   imagesJsonArray?: string;
-  status?: string;
+  status?: "pending" | "sent" | "failed" | "draft";
 }
 
 const PostForm: React.FC<PostFormProps> = ({
@@ -89,6 +89,18 @@ const PostForm: React.FC<PostFormProps> = ({
       channels: [],
       isScheduled: false,
     };
+
+  // Initialize schedule date and time from initData
+  React.useEffect(() => {
+    if (initData.scheduleTime) {
+      const scheduleDate = new Date(initData.scheduleTime);
+      // Convert to JST for display
+      const jstDate = new Date(scheduleDate.getTime() + 9 * 60 * 60 * 1000);
+      setScheduleDate(jstDate.toISOString().split("T")[0]);
+      setScheduleTime(jstDate.toTimeString().slice(0, 5));
+      setIsScheduled(true);
+    }
+  }, [initData.scheduleTime]);
 
   const [activeTab, setActiveTab] = useState<string>("ai");
   const [content, setContent] = useState<string>(initData.content || "");
@@ -124,6 +136,7 @@ const PostForm: React.FC<PostFormProps> = ({
   const [aiSettings, setAiSettings] = useState<any>(null);
   const [aiConfigured, setAiConfigured] = useState<boolean>(false);
   const [loadingAiSettings, setLoadingAiSettings] = useState<boolean>(true);
+  const [imageLoadError, setImageLoadError] = useState<string>("");
 
   const {
     register,
@@ -308,10 +321,10 @@ const PostForm: React.FC<PostFormProps> = ({
         throw new Error("AIからの応答が空です");
       }
 
-      // Set the generated content
-      setGeneratedContent(aiResponse.content);
+      // Clear the generated content display (as requested)
+      setGeneratedContent({});
 
-      // Also update platform content with generated content
+      // Update platform content with generated content
       const newPlatformContent = { ...platformContent };
       Object.entries(aiResponse.content).forEach(([platform, content]) => {
         if (selectedPlatforms.includes(platform)) {
@@ -358,8 +371,8 @@ const PostForm: React.FC<PostFormProps> = ({
     }
   };
 
-  const handleFormSubmit = async () => {
-    if (!validateContent()) return;
+  const handleFormSubmit = async (isDraft = false) => {
+    if (!isDraft && !validateContent()) return;
 
     // Generate images data
     const imageNames = selectedImages.map((img) => img.name);
@@ -407,7 +420,7 @@ const PostForm: React.FC<PostFormProps> = ({
         platformSchedules,
         imagesCommaSeparated,
         imagesJsonArray,
-        status: "pending",
+        status: isDraft ? "draft" : "pending",
         id: baseId, // Use base ID for editing
       };
 
@@ -453,7 +466,7 @@ const PostForm: React.FC<PostFormProps> = ({
         platformSchedules,
         imagesCommaSeparated,
         imagesJsonArray,
-        status: "pending",
+        status: isDraft ? "draft" : "pending",
         id: `${baseId}_${platform}`, // Use consistent ID format with platform suffix
       };
 
@@ -578,10 +591,37 @@ const PostForm: React.FC<PostFormProps> = ({
                 <Label className="text-base font-medium">
                   1. Target Platforms を選択
                 </Label>
-                <PlatformSelector
-                  selectedPlatforms={selectedPlatforms}
-                  onChange={setSelectedPlatforms}
-                />
+                {isEditing ? (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      編集モードでは、プラットフォームの変更はできません。
+                    </p>
+                    <div className="flex gap-2">
+                      {selectedPlatforms.map((platform) => {
+                        const platformInfo = {
+                          x: "X (Twitter)",
+                          instagram: "Instagram",
+                          facebook: "Facebook",
+                          line: "LINE",
+                          discord: "Discord",
+                          wordpress: "WordPress",
+                        };
+                        return (
+                          <Badge key={platform} variant="outline">
+                            {platformInfo[
+                              platform as keyof typeof platformInfo
+                            ] || platform}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <PlatformSelector
+                    selectedPlatforms={selectedPlatforms}
+                    onChange={setSelectedPlatforms}
+                  />
+                )}
               </div>
 
               {/* 2. Base Content Form */}
@@ -613,11 +653,16 @@ const PostForm: React.FC<PostFormProps> = ({
                 />
               </div>
 
-              {/* 4. Select Images */}
+              {/* Image error message for edit mode */}
+              {isEditing && imageLoadError && (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-800">{imageLoadError}</p>
+                </div>
+              )}
+
+              {/* 3. Select Images */}
               <div className="space-y-2">
-                <Label htmlFor="image-select">
-                  4. 画像を選択（オプション）
-                </Label>
+                <Label htmlFor="manual-image-select">3. 画像を選択</Label>
                 <div className="text-sm text-muted-foreground mb-2">
                   投稿に使用する画像を選択してください。後でプラットフォーム別に使用する画像を選択できます。
                 </div>
@@ -848,35 +893,6 @@ const PostForm: React.FC<PostFormProps> = ({
                     </>
                   )}
                 </Button>
-
-                {/* Generated Content Preview */}
-                {Object.keys(generatedContent).length > 0 && (
-                  <div className="space-y-4">
-                    <Label>プラットフォーム別生成コンテンツ</Label>
-                    {Object.entries(generatedContent).map(
-                      ([platform, platformContent]) => {
-                        const validation =
-                          platformValidations[
-                            platform as keyof typeof platformValidations
-                          ];
-                        return (
-                          <Card key={platform} className="p-4">
-                            <div className="flex justify-between items-center mb-2">
-                              <Badge variant="outline">
-                                {validation?.name || platform}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {platformContent.length}/{validation?.maxLength}{" "}
-                                文字
-                              </span>
-                            </div>
-                            <p className="text-sm">{platformContent}</p>
-                          </Card>
-                        );
-                      },
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </TabsContent>
@@ -888,10 +904,37 @@ const PostForm: React.FC<PostFormProps> = ({
                 <Label className="text-base font-medium">
                   1. Target Platforms を選択
                 </Label>
-                <PlatformSelector
-                  selectedPlatforms={selectedPlatforms}
-                  onChange={setSelectedPlatforms}
-                />
+                {isEditing ? (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      編集モードでは、プラットフォームの変更はできません。
+                    </p>
+                    <div className="flex gap-2">
+                      {selectedPlatforms.map((platform) => {
+                        const platformInfo = {
+                          x: "X (Twitter)",
+                          instagram: "Instagram",
+                          facebook: "Facebook",
+                          line: "LINE",
+                          discord: "Discord",
+                          wordpress: "WordPress",
+                        };
+                        return (
+                          <Badge key={platform} variant="outline">
+                            {platformInfo[
+                              platform as keyof typeof platformInfo
+                            ] || platform}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <PlatformSelector
+                    selectedPlatforms={selectedPlatforms}
+                    onChange={setSelectedPlatforms}
+                  />
+                )}
               </div>
 
               {/* 2. Content Form */}
@@ -1160,17 +1203,26 @@ const PostForm: React.FC<PostFormProps> = ({
           <Button variant="outline" type="button" onClick={onCancel}>
             キャンセル
           </Button>
-          <Button
-            onClick={handleFormSubmit}
-            disabled={
-              hasValidationErrors ||
-              selectedPlatforms.length === 0 ||
-              !content.trim()
-            }
-          >
-            <Send className="mr-2 h-4 w-4" />
-            {isScheduled ? "スケジュール投稿" : "今すぐ投稿"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => handleFormSubmit(true)}
+              disabled={selectedPlatforms.length === 0 || !content.trim()}
+            >
+              下書き保存
+            </Button>
+            <Button
+              onClick={() => handleFormSubmit(false)}
+              disabled={
+                hasValidationErrors ||
+                selectedPlatforms.length === 0 ||
+                !content.trim()
+              }
+            >
+              <Send className="mr-2 h-4 w-4" />
+              {isScheduled ? "スケジュール投稿" : "今すぐ投稿"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

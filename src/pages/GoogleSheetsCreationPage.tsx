@@ -11,21 +11,35 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, CheckCircle, XCircle, FileSpreadsheet } from "lucide-react";
-import { getUserSettings } from "@/lib/supabase";
+import {
+  getUserSettings,
+  getGoogleAccessToken,
+  createGoogleSheetWithOAuth,
+  openGoogleDrivePicker,
+  createGoogleDriveImageFolder,
+} from "@/lib/supabase";
 
 export default function GoogleSheetsCreationPage() {
   const [loading, setLoading] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [directoryId, setDirectoryId] = useState("");
   const [createdSheetUrl, setCreatedSheetUrl] = useState("");
+  const [settings, setSettings] = useState<any>(null);
   const { toast } = useToast();
 
   // Check Google connection status
   useEffect(() => {
     const checkGoogleConnection = async () => {
       try {
-        const settings = await getUserSettings();
-        setGoogleConnected(settings?.google_connection_status || false);
+        const userSettings = await getUserSettings();
+        setSettings(userSettings);
+        // Check if user has Google OAuth token
+        try {
+          await getGoogleAccessToken();
+          setGoogleConnected(true);
+        } catch (error) {
+          setGoogleConnected(false);
+        }
       } catch (error) {
         console.error("Failed to check Google connection:", error);
         setGoogleConnected(false);
@@ -46,10 +60,17 @@ export default function GoogleSheetsCreationPage() {
 
     setLoading(true);
     try {
-      const result = await createGoogleSheet(directoryId || undefined);
+      const accessToken = await getGoogleAccessToken();
+      const result = await createGoogleSheetWithOAuth(
+        accessToken,
+        directoryId || undefined,
+      );
 
       if (result.success) {
         setCreatedSheetUrl(result.sheetUrl || "");
+        // Refresh settings to show updated sheet info
+        const updatedSettings = await getUserSettings();
+        setSettings(updatedSettings);
         toast({
           title: "作成完了",
           description: result.message,
@@ -69,6 +90,86 @@ export default function GoogleSheetsCreationPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleChangeSheet = async () => {
+    toast({
+      title: "機能準備中",
+      description: "シート変更機能は準備中です",
+    });
+  };
+
+  const handleCreateFolder = async () => {
+    if (!googleConnected) {
+      toast({
+        title: "接続エラー",
+        description: "Google連携設定を完了してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const accessToken = await getGoogleAccessToken();
+      const result = await createGoogleDriveImageFolder(
+        accessToken,
+        directoryId || undefined,
+      );
+
+      if (result.success) {
+        // Refresh settings to show updated folder info
+        const updatedSettings = await getUserSettings();
+        setSettings(updatedSettings);
+        toast({
+          title: "フォルダ作成完了",
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: "フォルダ作成エラー",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "フォルダ作成エラー",
+        description: "Google Driveフォルダの作成に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChangeFolder = async () => {
+    if (!googleConnected) {
+      toast({
+        title: "接続エラー",
+        description: "Google連携設定を完了してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const accessToken = await getGoogleAccessToken();
+      const folderResult = await openGoogleDrivePicker(accessToken);
+
+      if (folderResult) {
+        toast({
+          title: "フォルダ選択完了",
+          description: `選択されたフォルダ: ${folderResult.folderName}`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "フォルダ選択エラー",
+        description: "フォルダの選択に失敗しました",
+        variant: "destructive",
+      });
     }
   };
 
@@ -96,9 +197,52 @@ export default function GoogleSheetsCreationPage() {
           </CardHeader>
           <CardContent>
             {googleConnected ? (
-              <div className="flex items-center gap-2 text-green-600">
-                <CheckCircle className="h-4 w-4" />
-                <span>Google連携が完了しています</span>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-green-600">
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Google連携が完了しています</span>
+                </div>
+
+                {/* Google Sheet Information */}
+                {settings?.google_sheet_url && (
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-sm font-medium text-green-800 mb-2">
+                      現在のGoogle Sheet:
+                    </p>
+                    <a
+                      href={settings.google_sheet_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
+                    >
+                      <FileSpreadsheet className="h-4 w-4" />
+                      {settings.google_sheet_url}
+                    </a>
+                  </div>
+                )}
+
+                {/* Google Drive Folder Information */}
+                {settings?.google_drive_folder_url && (
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                    <p className="text-sm font-medium text-blue-800 mb-2">
+                      現在の画像フォルダ:
+                    </p>
+                    <div className="space-y-1">
+                      <p className="text-sm text-gray-700">
+                        フォルダ名: {settings.google_drive_folder_name}
+                      </p>
+                      <a
+                        href={settings.google_drive_folder_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
+                      >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        {settings.google_drive_folder_url}
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -107,7 +251,7 @@ export default function GoogleSheetsCreationPage() {
                   <span>Google連携が完了していません</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  ユーザー設定画面でGoogle連携設定を完了してください。
+                  Googleアカウントでログインしてください。
                 </p>
               </div>
             )}
@@ -141,16 +285,54 @@ export default function GoogleSheetsCreationPage() {
               </p>
             </div>
 
-            <Button
-              onClick={handleCreateSheet}
-              disabled={loading || !googleConnected}
-              className="w-full"
-              size="lg"
-            >
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Google Sheet を作成
-            </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button
+                onClick={handleCreateSheet}
+                disabled={loading || !googleConnected}
+                className="w-full"
+                size="lg"
+              >
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Google Sheet を作成
+              </Button>
+
+              <Button
+                onClick={handleChangeSheet}
+                disabled={loading || !googleConnected}
+                variant="outline"
+                className="w-full"
+                size="lg"
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                シート変更
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <Button
+                onClick={handleCreateFolder}
+                disabled={loading || !googleConnected}
+                variant="secondary"
+                className="w-full"
+                size="lg"
+              >
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                新規フォルダ作成
+              </Button>
+
+              <Button
+                onClick={handleChangeFolder}
+                disabled={loading || !googleConnected}
+                variant="outline"
+                className="w-full"
+                size="lg"
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                フォルダ変更
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

@@ -134,7 +134,7 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <PlusCircle className="h-5 w-5" />
-                投稿作成
+                投稿作成・管理
               </CardTitle>
               <CardDescription>新しいSNS投稿を作成</CardDescription>
             </CardHeader>
@@ -154,8 +154,9 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
-                SNS投稿管理システムへようこそ。まずはユーザー設定でGoogle連携とAI連携を設定してください。
-                設定完了後、Google Sheetsを作成して投稿管理を開始できます。
+                SNS投稿管理システムへようこそ。まずはGoogle Sheet・Google Drive
+                Folderの作成から初めてください。AI設定は、ユーザ設定ページで行います。（AI設定は任意です。）
+                設定完了後、投稿管理を開始できます。
               </p>
             </CardContent>
           </Card>

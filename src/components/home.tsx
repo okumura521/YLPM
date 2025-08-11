@@ -54,7 +54,7 @@ interface Post {
   scheduleTime: string;
   platforms: string[];
   channels?: string[];
-  status: "pending" | "sent" | "failed";
+  status: "pending" | "sent" | "failed" | "draft";
   updatedAt: string;
   imageUrl?: string;
 }
@@ -223,14 +223,8 @@ const Home = () => {
           navigate("/login", { replace: true });
         } else {
           setUser(user);
-          // Handle sheet creation for Google OAuth users only once
-          if (
-            !sheetCreationHandled.current &&
-            user.app_metadata?.provider === "google"
-          ) {
-            sheetCreationHandled.current = true;
-            await handleSheetCreationOnLogin();
-          }
+          // No longer auto-create sheets on login - redirect to dashboard instead
+          // Users will create sheets manually from the dashboard
         }
       } catch (error) {
         console.error("Authentication check failed:", error);
@@ -254,14 +248,8 @@ const Home = () => {
         navigate("/login", { replace: true });
       } else if (event === "SIGNED_IN" && session?.user) {
         setUser(session.user);
-        // Handle sheet creation for Google OAuth users only once
-        if (
-          !sheetCreationHandled.current &&
-          session.user.app_metadata?.provider === "google"
-        ) {
-          sheetCreationHandled.current = true;
-          await handleSheetCreationOnLogin();
-        }
+        // No longer auto-create sheets on login - redirect to dashboard instead
+        // Users will create sheets manually from the dashboard
       }
     });
 
@@ -599,6 +587,9 @@ const Home = () => {
           postId,
           imageUrl: post.imageUrl,
         });
+        // Set image load error message for edit mode
+        postForEdit.imageLoadError =
+          "選択された画像が取得できません。再度設定してください。";
       }
 
       setCurrentPost(postForEdit);
@@ -760,6 +751,9 @@ const Home = () => {
             </Badge>
             <Badge variant="outline" className="bg-red-100">
               失敗: {posts.filter((post) => post.status === "failed").length}
+            </Badge>
+            <Badge variant="outline" className="bg-gray-100">
+              下書き: {posts.filter((post) => post.status === "draft").length}
             </Badge>
           </div>
           <PostTable

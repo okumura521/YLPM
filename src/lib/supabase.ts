@@ -1005,7 +1005,8 @@ export const fetchPostsFromGoogleSheet = async () => {
           content: row[1] || "",
           platforms: [], // Use platforms instead of channels
           scheduleTime: jstTime.toISOString(),
-          status: (row[4] as "pending" | "sent" | "failed") || "pending",
+          status:
+            (row[4] as "pending" | "sent" | "failed" | "draft") || "pending",
           imageUrl: row[5] || "",
           updatedAt: row[10] || row[9] || new Date().toISOString(), // Updated at is at index 10
         });

@@ -35,7 +35,7 @@ export default function LoginPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        navigate("/", { replace: true });
+        navigate("/dashboard", { replace: true });
       }
     };
     checkUser();
@@ -47,7 +47,7 @@ export default function LoginPage() {
       if (event === "SIGNED_IN" && session) {
         // Wait a bit to ensure the session is fully established
         setTimeout(() => {
-          navigate("/", { replace: true });
+          navigate("/dashboard", { replace: true });
         }, 100);
       }
     });
@@ -89,8 +89,8 @@ export default function LoginPage() {
           description: "テストユーザーでログインしました",
         });
 
-        // Navigate to home page
-        navigate("/", { replace: true });
+        // Navigate to dashboard page
+        navigate("/dashboard", { replace: true });
         return;
       } catch (error) {
         toast({
@@ -135,7 +135,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: `${window.location.origin}/dashboard`,
           scopes:
             "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets",
         },
