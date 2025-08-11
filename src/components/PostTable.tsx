@@ -24,7 +24,7 @@ interface Post {
   content: string;
   scheduleTime: string;
   platforms: string[];
-  status: "pending" | "sent" | "failed";
+  status: "pending" | "sent" | "failed" | "draft";
   updatedAt: string;
 }
 
@@ -97,8 +97,25 @@ const PostTable: React.FC<PostTableProps> = ({
         return "secondary";
       case "failed":
         return "destructive";
+      case "draft":
+        return "outline";
       default:
         return "default";
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "予定";
+      case "sent":
+        return "送信済";
+      case "failed":
+        return "失敗";
+      case "draft":
+        return "下書き";
+      default:
+        return status;
     }
   };
 
@@ -106,21 +123,14 @@ const PostTable: React.FC<PostTableProps> = ({
     <Card className="w-full bg-white">
       <CardHeader>
         <CardTitle className="flex justify-between items-center">
-          <span>Posts</span>
+          <span>投稿一覧</span>
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => console.log("Filter clicked")}
             >
-              Filter
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => console.log("Bulk actions clicked")}
-            >
-              Bulk Actions
+              フィルター
             </Button>
           </div>
         </CardTitle>
@@ -142,28 +152,28 @@ const PostTable: React.FC<PostTableProps> = ({
                   className="cursor-pointer"
                   onClick={() => handleSort("content")}
                 >
-                  Content
+                  投稿内容
                 </TableHead>
                 <TableHead
                   className="cursor-pointer"
                   onClick={() => handleSort("scheduleTime")}
                 >
-                  Schedule Time
+                  予定時刻
                 </TableHead>
-                <TableHead>Platforms</TableHead>
+                <TableHead>プラットフォーム</TableHead>
                 <TableHead
                   className="cursor-pointer"
                   onClick={() => handleSort("status")}
                 >
-                  Status
+                  ステータス
                 </TableHead>
                 <TableHead
                   className="cursor-pointer"
                   onClick={() => handleSort("updatedAt")}
                 >
-                  Last Updated
+                  最終更新
                 </TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -184,7 +194,15 @@ const PostTable: React.FC<PostTableProps> = ({
                       </div>
                     </TableCell>
                     <TableCell>
-                      {new Date(post.scheduleTime).toLocaleString()}
+                      {new Date(post.scheduleTime).toLocaleString("ja-JP", {
+                        timeZone: "Asia/Tokyo",
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
@@ -197,11 +215,19 @@ const PostTable: React.FC<PostTableProps> = ({
                     </TableCell>
                     <TableCell>
                       <Badge variant={getStatusBadgeVariant(post.status)}>
-                        {post.status}
+                        {getStatusText(post.status)}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {new Date(post.updatedAt).toLocaleString()}
+                      {new Date(post.updatedAt).toLocaleString("ja-JP", {
+                        timeZone: "Asia/Tokyo",
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -214,15 +240,15 @@ const PostTable: React.FC<PostTableProps> = ({
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => onEdit(post.id)}>
                             <Edit className="mr-2 h-4 w-4" />
-                            Edit
+                            編集
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => onDelete(post.id)}>
                             <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
+                            削除
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => onRefresh(post.id)}>
                             <RefreshCw className="mr-2 h-4 w-4" />
-                            Refresh Status
+                            ステータス更新
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -232,7 +258,7 @@ const PostTable: React.FC<PostTableProps> = ({
               ) : (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8">
-                    No posts found. Create your first post!
+                    投稿が見つかりません。最初の投稿を作成してください！
                   </TableCell>
                 </TableRow>
               )}
@@ -248,8 +274,7 @@ const PostTable: React.FC<PostTableProps> = ({
 const defaultPosts: Post[] = [
   {
     id: "1",
-    content:
-      "Exciting news! We just launched our new product. Check it out at our website!",
+    content: "新商品を発表しました！詳細はウェブサイトをご確認ください。",
     scheduleTime: "2023-06-15T10:00:00",
     platforms: ["x", "facebook"],
     status: "sent",
@@ -257,8 +282,7 @@ const defaultPosts: Post[] = [
   },
   {
     id: "2",
-    content:
-      "Join us for our upcoming webinar on digital marketing strategies for small businesses.",
+    content: "中小企業向けデジタルマーケティング戦略のウェビナーを開催します。",
     scheduleTime: "2023-06-20T14:00:00",
     platforms: ["x", "instagram", "linkedin"],
     status: "pending",
@@ -266,11 +290,19 @@ const defaultPosts: Post[] = [
   },
   {
     id: "3",
-    content: "We're hiring! Looking for talented developers to join our team.",
+    content: "採用情報：優秀な開発者を募集しています。",
     scheduleTime: "2023-06-18T12:00:00",
     platforms: ["linkedin", "x"],
     status: "failed",
     updatedAt: "2023-06-18T12:01:00",
+  },
+  {
+    id: "4",
+    content: "下書きの投稿です。後で編集予定。",
+    scheduleTime: "2023-06-25T15:00:00",
+    platforms: ["x"],
+    status: "draft",
+    updatedAt: "2023-06-20T12:00:00",
   },
 ];
 
