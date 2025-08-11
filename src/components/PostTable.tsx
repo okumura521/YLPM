@@ -124,14 +124,8 @@ const PostTable: React.FC<PostTableProps> = ({
       <CardHeader>
         <CardTitle className="flex justify-between items-center">
           <span>投稿一覧</span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => console.log("Filter clicked")}
-            >
-              フィルター
-            </Button>
+          <div className="text-sm text-muted-foreground">
+            クリックして並び替え
           </div>
         </CardTitle>
       </CardHeader>
@@ -148,30 +142,31 @@ const PostTable: React.FC<PostTableProps> = ({
                     onCheckedChange={(checked) => handleSelectAll(!!checked)}
                   />
                 </TableHead>
+                <TableHead>投稿内容</TableHead>
                 <TableHead
-                  className="cursor-pointer"
-                  onClick={() => handleSort("content")}
-                >
-                  投稿内容
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer"
+                  className="cursor-pointer hover:bg-gray-50"
                   onClick={() => handleSort("scheduleTime")}
                 >
-                  予定時刻
+                  予定時刻{" "}
+                  {sortConfig?.key === "scheduleTime" &&
+                    (sortConfig.direction === "ascending" ? "↑" : "↓")}
                 </TableHead>
                 <TableHead>プラットフォーム</TableHead>
                 <TableHead
-                  className="cursor-pointer"
+                  className="cursor-pointer hover:bg-gray-50"
                   onClick={() => handleSort("status")}
                 >
-                  ステータス
+                  ステータス{" "}
+                  {sortConfig?.key === "status" &&
+                    (sortConfig.direction === "ascending" ? "↑" : "↓")}
                 </TableHead>
                 <TableHead
-                  className="cursor-pointer"
+                  className="cursor-pointer hover:bg-gray-50"
                   onClick={() => handleSort("updatedAt")}
                 >
-                  最終更新
+                  最終更新{" "}
+                  {sortConfig?.key === "updatedAt" &&
+                    (sortConfig.direction === "ascending" ? "↑" : "↓")}
                 </TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>

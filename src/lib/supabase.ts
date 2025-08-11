@@ -94,8 +94,6 @@ export const saveUserSettings = async (settings: {
   aiModel?: string;
   aiApiToken?: string;
   aiConnectionStatus?: boolean;
-  imagesCommaSeparated?: string;
-  imagesJsonArray?: string;
 }) => {
   const {
     data: { user },
@@ -134,10 +132,6 @@ export const saveUserSettings = async (settings: {
       updateData.ai_api_token = settings.aiApiToken;
     if (settings.aiConnectionStatus !== undefined)
       updateData.ai_connection_status = settings.aiConnectionStatus;
-    if (settings.imagesCommaSeparated !== undefined)
-      updateData.images_comma_separated = settings.imagesCommaSeparated;
-    if (settings.imagesJsonArray !== undefined)
-      updateData.images_json_array = settings.imagesJsonArray;
 
     const result = await supabase
       .from("user_settings")
@@ -163,8 +157,6 @@ export const saveUserSettings = async (settings: {
         ai_model: settings.aiModel,
         ai_api_token: settings.aiApiToken,
         ai_connection_status: settings.aiConnectionStatus,
-        images_comma_separated: settings.imagesCommaSeparated,
-        images_json_array: settings.imagesJsonArray,
       })
       .select()
       .single();
@@ -801,8 +793,8 @@ export const addPostToGoogleSheet = async (post: any) => {
               scheduleTimeJST,
               post.status || "pending",
               imageUrl,
-              post.imagesCommaSeparated || "",
-              post.imagesJsonArray || "",
+              "", // Reserved for future use
+              "", // Reserved for future use
               "FALSE", // Delete flag
               jstTimestamp, // Created at
               jstTimestamp, // Updated at
