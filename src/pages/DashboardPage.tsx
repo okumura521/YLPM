@@ -65,13 +65,19 @@ export default function DashboardPage() {
                 className="w-10 h-10 rounded-lg"
               />
               <div>
-                <h1 className="text-xl font-semibold">YLPM Dashboard</h1>
+                <h1 className="text-xl font-semibold">
+                  YLPM Dashboard{" "}
+                  <span className="text-sm text-muted-foreground">Ver.0</span>
+                </h1>
                 <p className="text-sm text-muted-foreground">
                   SNS投稿管理システム
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-4">
+              <Button variant="outline" size="sm" onClick={() => navigate("/")}>
+                ホーム
+              </Button>
               <span className="text-sm text-muted-foreground">
                 {user.email}
               </span>

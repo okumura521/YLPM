@@ -180,11 +180,9 @@ export default function UserSettingsPage() {
                 alt="YLPM Logo"
                 className="w-12 h-12 rounded-lg"
               />
-              <h1 className="text-3xl font-bold">ユーザー設定</h1>
+              <h1 className="text-3xl font-bold">AI設定</h1>
             </div>
-            <p className="text-muted-foreground mt-2">
-              Google連携とAI連携の設定を行います
-            </p>
+            <p className="text-muted-foreground mt-2">AI連携の設定を行います</p>
           </div>
           <Button
             variant="outline"
@@ -195,77 +193,6 @@ export default function UserSettingsPage() {
             <X className="h-4 w-4" />
           </Button>
         </div>
-
-        {/* Google Sheet Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Google Sheet情報
-              {googleSheetUrl ? (
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              ) : (
-                <XCircle className="h-5 w-5 text-red-500" />
-              )}
-            </CardTitle>
-            <CardDescription>SNS投稿管理用のGoogle Sheet</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {googleSheetUrl ? (
-              <div className="space-y-4">
-                <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                  <p className="text-sm font-medium text-green-800 mb-2">
-                    Google Sheet URL:
-                  </p>
-                  <a
-                    href={googleSheetUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
-                  >
-                    <FileSpreadsheet className="h-4 w-4" />
-                    {googleSheetUrl}
-                  </a>
-                </div>
-                {googleDriveFolderUrl && (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-                    <p className="text-sm font-medium text-blue-800 mb-2">
-                      Google Drive 画像フォルダ:
-                    </p>
-                    <div className="space-y-1">
-                      <p className="text-sm text-gray-700">
-                        フォルダ名: {googleDriveFolderName}
-                      </p>
-                      <a
-                        href={googleDriveFolderUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
-                      >
-                        <FileSpreadsheet className="h-4 w-4" />
-                        {googleDriveFolderUrl}
-                      </a>
-                    </div>
-                  </div>
-                )}
-                {!googleDriveFolderUrl && googleSheetUrl && (
-                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                    <p className="text-sm text-yellow-800">
-                      Google
-                      Drive画像フォルダが設定されていません。再ログインすると自動的に作成されます。
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                <p className="text-sm text-yellow-800">
-                  Google
-                  Sheetが設定されていません。Googleでログインすると自動的に作成されます。
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* AI Settings */}
         <Card>
@@ -336,13 +263,16 @@ export default function UserSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Save Button */}
-        <div className="flex justify-center">
+        {/* Navigation and Save Button */}
+        <div className="flex justify-between items-center">
+          <Button variant="outline" onClick={() => navigate("/dashboard")}>
+            ← ダッシュボードに戻る
+          </Button>
           <Button
             onClick={handleSaveSettings}
             disabled={loading}
             size="lg"
-            className="w-full max-w-md"
+            className="px-8"
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             設定を保存

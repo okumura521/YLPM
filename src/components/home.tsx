@@ -653,11 +653,21 @@ const Home = () => {
             className="w-12 h-12 rounded-lg"
           />
           <div>
-            <h1 className="text-3xl font-bold">Yell-lab-PostMate</h1>
+            <h1 className="text-3xl font-bold">
+              Yell-lab-PostMate{" "}
+              <span className="text-lg text-muted-foreground">Ver.0</span>
+            </h1>
             <p className="text-muted-foreground">SNS投稿作成＆管理システム</p>
           </div>
         </div>
         <div className="flex items-center gap-4">
+          <Button
+            onClick={() => navigate("/dashboard")}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            ダッシュボード
+          </Button>
           <Button
             onClick={() => setIsCreateDialogOpen(true)}
             className="flex items-center gap-2"
@@ -687,9 +697,13 @@ const Home = () => {
               </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleUserSettings}>
+              <DropdownMenuItem onClick={() => navigate("/settings")}>
                 <Settings className="mr-2 h-4 w-4" />
-                ユーザー設定
+                AI設定
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/create-sheet")}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Google Sheet作成
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
@@ -860,6 +874,36 @@ const Home = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Update History Section */}
+      <Card className="mt-8">
+        <CardHeader>
+          <CardTitle>更新履歴</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="border-l-4 border-blue-500 pl-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold">初版リリース</h4>
+                <Badge variant="outline">Ver.0</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mb-2">2024年12月</p>
+              <ul className="text-sm space-y-1">
+                <li>• SNS投稿作成・管理機能</li>
+                <li>• Google Sheets連携</li>
+                <li>• AI生成機能</li>
+                <li>• 複数プラットフォーム対応</li>
+                <li>• スケジュール投稿機能</li>
+              </ul>
+            </div>
+            <div className="text-xs text-muted-foreground p-3 bg-gray-50 rounded">
+              <p>
+                更新履歴は手動で更新されます。新しいバージョンの情報をここにコピー＆ペーストしてください。
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

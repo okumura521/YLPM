@@ -71,6 +71,8 @@ export default function GoogleSheetsCreationPage() {
         // Refresh settings to show updated sheet info
         const updatedSettings = await getUserSettings();
         setSettings(updatedSettings);
+        // Force a page refresh to update the display
+        window.location.reload();
         toast({
           title: "作成完了",
           description: result.message,
@@ -122,6 +124,8 @@ export default function GoogleSheetsCreationPage() {
         // Refresh settings to show updated folder info
         const updatedSettings = await getUserSettings();
         setSettings(updatedSettings);
+        // Force a page refresh to update the display
+        window.location.reload();
         toast({
           title: "フォルダ作成完了",
           description: result.message,
@@ -145,42 +149,28 @@ export default function GoogleSheetsCreationPage() {
   };
 
   const handleChangeFolder = async () => {
-    if (!googleConnected) {
-      toast({
-        title: "接続エラー",
-        description: "Google連携設定を完了してください",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const accessToken = await getGoogleAccessToken();
-      const folderResult = await openGoogleDrivePicker(accessToken);
-
-      if (folderResult) {
-        toast({
-          title: "フォルダ選択完了",
-          description: `選択されたフォルダ: ${folderResult.folderName}`,
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "フォルダ選択エラー",
-        description: "フォルダの選択に失敗しました",
-        variant: "destructive",
-      });
-    }
+    toast({
+      title: "機能準備中",
+      description: "フォルダ変更機能は準備中です",
+    });
   };
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="text-center">
-          <h1 className="text-3xl font-bold">Google Sheets 新規作成</h1>
-          <p className="text-muted-foreground mt-2">
-            SNS投稿管理用のGoogle Sheetを作成します
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <Button variant="outline" onClick={() => window.history.back()}>
+              ← 戻る
+            </Button>
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold">Google Sheets 新規作成</h1>
+              <p className="text-muted-foreground mt-2">
+                SNS投稿管理用のGoogle Sheetを作成します
+              </p>
+            </div>
+            <div className="w-20"></div>
+          </div>
         </div>
 
         {/* Connection Status */}
@@ -209,15 +199,26 @@ export default function GoogleSheetsCreationPage() {
                     <p className="text-sm font-medium text-green-800 mb-2">
                       現在のGoogle Sheet:
                     </p>
-                    <a
-                      href={settings.google_sheet_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
-                    >
-                      <FileSpreadsheet className="h-4 w-4" />
-                      {settings.google_sheet_url}
-                    </a>
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-700">
+                        ファイル名:{" "}
+                        {settings.google_sheet_url.includes("YLPM Posts")
+                          ? settings.google_sheet_url
+                              .split("/")
+                              .pop()
+                              ?.split("#")[0] || "YLPM Posts Sheet"
+                          : "YLPM Posts Sheet"}
+                      </p>
+                      <a
+                        href={settings.google_sheet_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-2"
+                      >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        {settings.google_sheet_url}
+                      </a>
+                    </div>
                   </div>
                 )}
 
@@ -278,11 +279,27 @@ export default function GoogleSheetsCreationPage() {
                 onChange={(e) => setDirectoryId(e.target.value)}
                 placeholder="ディレクトリIDを入力（空白の場合はルートに作成）"
               />
-              <p className="text-xs text-muted-foreground">
-                Google
-                DriveのURLから取得できるディレクトリIDを入力してください。
-                空白の場合は、マイドライブのルートに作成されます。
-              </p>
+              <div className="text-xs text-muted-foreground space-y-2">
+                <p>
+                  Google
+                  DriveのURLから取得できるディレクトリIDを入力してください。
+                  空白の場合は、マイドライブのルートに作成されます。
+                </p>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded">
+                  <p className="font-medium mb-1">フォルダIDの取得方法：</p>
+                  <p>
+                    URLの「https://drive.google.com/drive/folders/」の後に続く文字列が、そのフォルダのIDです。
+                  </p>
+                  <p className="mt-1">
+                    例：https://drive.google.com/drive/folders/1a2B3cD4EfGhIjKlmNOpQRstuVWxyz
+                    というURLの場合、
+                    <span className="font-mono bg-white px-1 rounded">
+                      1a2B3cD4EfGhIjKlmNOpQRstuVWxyz
+                    </span>{" "}
+                    がフォルダIDとなります。
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
