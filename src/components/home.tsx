@@ -85,29 +85,51 @@ const Home = () => {
     }
   };
 
-  // Refresh Google token
-  const refreshGoogleToken = async (): Promise<boolean> => {
-    if (tokenRefreshAttempted.current) {
+  // Refresh Google token with staged error handling
+  const refreshGoogleToken = async (
+    attempt: number = 1,
+  ): Promise<{ success: boolean; shouldLogout: boolean }> => {
+    if (tokenRefreshAttempted.current && attempt === 1) {
       addLogEntry("INFO", "Token refresh already attempted, skipping");
-      return false;
+      return { success: false, shouldLogout: false };
     }
 
     try {
       tokenRefreshAttempted.current = true;
-      addLogEntry("INFO", "Attempting to refresh Google token");
+      addLogEntry(
+        "INFO",
+        `Attempting to refresh Google token (attempt ${attempt})`,
+      );
 
-      const refreshed = await refreshGoogleAccessToken();
-      if (refreshed) {
+      const result = await refreshGoogleAccessToken(attempt);
+
+      if (result.success) {
         addLogEntry("INFO", "Google token refreshed successfully");
         setSheetError(""); // Clear any existing errors
-        return true;
+        tokenRefreshAttempted.current = false; // Reset on success
+        return { success: true, shouldLogout: false };
+      } else if (result.shouldLogout) {
+        addLogEntry("ERROR", "Max refresh attempts reached, forcing logout");
+        setSheetError("認証の期限が切れました。再ログインが必要です。");
+        return { success: false, shouldLogout: true };
       } else {
         addLogEntry("ERROR", "Failed to refresh Google token");
-        return false;
+
+        if (attempt === 1) {
+          // Show user notification for manual retry
+          setSheetError("認証の更新に失敗しました。もう一度お試しください。");
+          toast({
+            title: "認証エラー",
+            description: "認証の更新に失敗しました。もう一度お試しください。",
+            variant: "destructive",
+          });
+        }
+
+        return { success: false, shouldLogout: false };
       }
     } catch (error) {
       addLogEntry("ERROR", "Error refreshing Google token", error);
-      return false;
+      return { success: false, shouldLogout: false };
     }
   };
 
@@ -150,10 +172,14 @@ const Home = () => {
           "Token error detected, attempting refresh and retry",
         );
 
-        const refreshed = await refreshGoogleToken();
-        if (refreshed) {
+        const result = await refreshGoogleToken(1);
+        if (result.success) {
           // Retry fetching posts
           setTimeout(() => fetchPosts(false), 1000);
+          return;
+        } else if (result.shouldLogout) {
+          // Force logout
+          await handleLogout();
           return;
         }
       }
@@ -252,8 +278,10 @@ const Home = () => {
         ) {
           const isValid = await checkGoogleTokenValidityLocal();
           if (!isValid && !tokenRefreshAttempted.current) {
-            const refreshed = await refreshGoogleToken();
-            if (!refreshed) {
+            const result = await refreshGoogleToken(1);
+            if (result.shouldLogout) {
+              await handleLogout();
+            } else if (!result.success) {
               setSheetError(
                 "Google認証の期限が切れています。再ログインしてください。",
               );
@@ -282,8 +310,11 @@ const Home = () => {
       const tokenValid = await checkGoogleTokenValidityLocal();
       if (!tokenValid) {
         addLogEntry("WARN", "Google token invalid, attempting refresh");
-        const refreshed = await refreshGoogleToken();
-        if (!refreshed) {
+        const result = await refreshGoogleToken(1);
+        if (result.shouldLogout) {
+          await handleLogout();
+          return;
+        } else if (!result.success) {
           setSheetError(
             "Google認証の期限が切れています。再ログインしてください。",
           );
@@ -424,8 +455,11 @@ const Home = () => {
           errorMessage.includes("access token") &&
           !tokenRefreshAttempted.current
         ) {
-          const refreshed = await refreshGoogleToken();
-          if (refreshed) {
+          const result = await refreshGoogleToken(1);
+          if (result.shouldLogout) {
+            await handleLogout();
+            return;
+          } else if (result.success) {
             // Retry saving the post
             const retryResult = await addPostToGoogleSheet({
               ...newPost,

@@ -70,14 +70,22 @@ export const callOpenAI = async (
       throw new Error("AIからの応答が空です");
     }
 
-    // Try to parse JSON response
+    // Clean and parse JSON response
     try {
-      const parsedContent = JSON.parse(content);
+      // Remove code blocks and extra whitespace
+      let cleanContent = content.trim();
+      cleanContent = cleanContent.replace(/```json\s*/g, "");
+      cleanContent = cleanContent.replace(/```\s*/g, "");
+      cleanContent = cleanContent.replace(/\n\n/g, "\n");
+      cleanContent = cleanContent.trim();
+
+      const parsedContent = JSON.parse(cleanContent);
       addLogEntry("INFO", "OpenAI API call successful", { parsedContent });
       return { success: true, content: parsedContent };
     } catch (parseError) {
       addLogEntry("WARN", "Failed to parse JSON response, using raw content", {
         content,
+        parseError,
       });
       return { success: true, content: { default: content } };
     }
@@ -151,14 +159,22 @@ export const callAnthropic = async (
       throw new Error("AIからの応答が空です");
     }
 
-    // Try to parse JSON response
+    // Clean and parse JSON response
     try {
-      const parsedContent = JSON.parse(content);
+      // Remove code blocks and extra whitespace
+      let cleanContent = content.trim();
+      cleanContent = cleanContent.replace(/```json\s*/g, "");
+      cleanContent = cleanContent.replace(/```\s*/g, "");
+      cleanContent = cleanContent.replace(/\n\n/g, "\n");
+      cleanContent = cleanContent.trim();
+
+      const parsedContent = JSON.parse(cleanContent);
       addLogEntry("INFO", "Anthropic API call successful", { parsedContent });
       return { success: true, content: parsedContent };
     } catch (parseError) {
       addLogEntry("WARN", "Failed to parse JSON response, using raw content", {
         content,
+        parseError,
       });
       return { success: true, content: { default: content } };
     }
@@ -238,14 +254,22 @@ export const callGoogleAI = async (
       throw new Error("AIからの応答が空です");
     }
 
-    // Try to parse JSON response
+    // Clean and parse JSON response
     try {
-      const parsedContent = JSON.parse(content);
+      // Remove code blocks and extra whitespace
+      let cleanContent = content.trim();
+      cleanContent = cleanContent.replace(/```json\s*/g, "");
+      cleanContent = cleanContent.replace(/```\s*/g, "");
+      cleanContent = cleanContent.replace(/\n\n/g, "\n");
+      cleanContent = cleanContent.trim();
+
+      const parsedContent = JSON.parse(cleanContent);
       addLogEntry("INFO", "Google AI API call successful", { parsedContent });
       return { success: true, content: parsedContent };
     } catch (parseError) {
       addLogEntry("WARN", "Failed to parse JSON response, using raw content", {
         content,
+        parseError,
       });
       return { success: true, content: { default: content } };
     }
@@ -305,28 +329,29 @@ export const buildPrompt = (
     })
     .join("\n");
 
-  return `以下の投稿内容を、指定されたプラットフォーム向けに最適化してください。
+  return `以下のベース内容・キーワードを基に、指定されたプラットフォーム向けに最適化されたコンテンツを生成してください。
 
-【元の投稿内容】
+【ベース投稿内容・キーワード】
 ${baseContent}
 
 【最適化指示】
 ${aiInstruction}
 
-【対象プラットフォーム】
+【対象プラットフォーム（これらのプラットフォームのみ生成してください）】
 ${platformInfo}
 
-【要求事項】
+【重要な要求事項】
+- 指定されたプラットフォームのみのコンテンツを生成してください
 - 各プラットフォームの文字数制限を厳守してください
 - プラットフォームの特性に合わせて内容を調整してください
-- 回答はJSON形式で、各プラットフォームをキーとして返してください
+- 回答は必ずJSON形式で、指定されたプラットフォームのみをキーとして返してください
+- JSONコードブロック（\`\`\`json）や余分な改行（\n\n）は含めないでください
 
 【回答形式例】
 {
   "x": "X向けの投稿内容（280文字以内）",
-  "instagram": "Instagram向けの投稿内容（2200文字以内）",
-  "facebook": "Facebook向けの投稿内容"
+  "instagram": "Instagram向けの投稿内容（2200文字以内）"
 }
 
-上記の形式で、選択されたプラットフォーム向けの最適化されたコンテンツを生成してください。`;
+上記の形式で、選択されたプラットフォーム（${platforms.join(", ")}）向けの最適化されたコンテンツのみを生成してください。`;
 };

@@ -500,8 +500,14 @@ export const createGoogleSheetWithOAuth = async (
   }
 };
 
-// Refresh Google Access Token
-export const refreshGoogleAccessToken = async (): Promise<boolean> => {
+// Token refresh tracking with retry count
+let tokenRefreshAttempts = 0;
+const MAX_REFRESH_ATTEMPTS = 3;
+
+// Refresh Google Access Token with staged error handling
+export const refreshGoogleAccessToken = async (
+  attempt: number = 1,
+): Promise<{ success: boolean; shouldLogout: boolean }> => {
   if (tokenRefreshInProgress) {
     addLogEntry("INFO", "Token refresh already in progress, waiting...");
     // Wait for ongoing refresh to complete
@@ -510,30 +516,53 @@ export const refreshGoogleAccessToken = async (): Promise<boolean> => {
       await new Promise((resolve) => setTimeout(resolve, 500));
       attempts++;
     }
-    return !tokenRefreshInProgress;
+    return { success: !tokenRefreshInProgress, shouldLogout: false };
   }
 
   try {
     tokenRefreshInProgress = true;
-    addLogEntry("INFO", "Attempting to refresh Google access token");
+    tokenRefreshAttempts = attempt;
+    addLogEntry(
+      "INFO",
+      `Attempting to refresh Google access token (attempt ${attempt}/${MAX_REFRESH_ATTEMPTS})`,
+    );
 
     const refreshResult = await supabase.auth.refreshSession();
 
     if (refreshResult.error) {
       addLogEntry("ERROR", "Failed to refresh session", refreshResult.error);
-      return false;
+
+      if (attempt >= MAX_REFRESH_ATTEMPTS) {
+        addLogEntry("ERROR", "Max refresh attempts reached, forcing logout");
+        return { success: false, shouldLogout: true };
+      }
+
+      return { success: false, shouldLogout: false };
     }
 
     if (refreshResult.data?.session?.provider_token) {
       addLogEntry("INFO", "Google access token refreshed successfully");
-      return true;
+      tokenRefreshAttempts = 0; // Reset on success
+      return { success: true, shouldLogout: false };
     }
 
     addLogEntry("WARN", "Session refreshed but no provider token found");
-    return false;
+
+    if (attempt >= MAX_REFRESH_ATTEMPTS) {
+      addLogEntry("ERROR", "Max refresh attempts reached, forcing logout");
+      return { success: false, shouldLogout: true };
+    }
+
+    return { success: false, shouldLogout: false };
   } catch (error) {
     addLogEntry("ERROR", "Error refreshing Google access token", error);
-    return false;
+
+    if (attempt >= MAX_REFRESH_ATTEMPTS) {
+      addLogEntry("ERROR", "Max refresh attempts reached, forcing logout");
+      return { success: false, shouldLogout: true };
+    }
+
+    return { success: false, shouldLogout: false };
   } finally {
     tokenRefreshInProgress = false;
   }
@@ -684,11 +713,11 @@ export const addPostToGoogleSheet = async (post: any) => {
       settings.google_drive_folder_id
     ) {
       for (const image of post.images) {
-        // Create a unique filename that includes the post ID for association
+        // Create a unique filename: {baseId}_{timestamp}_{originalName}
         const originalName = image.name;
-        const extension = originalName.split(".").pop();
         const baseId = post.id.includes("_") ? post.id.split("_")[0] : post.id;
-        const uniqueFileName = `${baseId}_${Date.now()}_${originalName}`;
+        const timestamp = Date.now();
+        const uniqueFileName = `${baseId}_${timestamp}_${originalName}`;
 
         // Create a new File object with the unique name
         const renamedFile = new File([image], uniqueFileName, {
@@ -734,6 +763,27 @@ export const addPostToGoogleSheet = async (post: any) => {
       );
     }
 
+    // Convert schedule time to JST for storage
+    let scheduleTimeJST = new Date().toISOString();
+    if (post.scheduleTime) {
+      const scheduleTime =
+        post.scheduleTime instanceof Date
+          ? post.scheduleTime
+          : new Date(post.scheduleTime);
+      const jstTime = new Date(scheduleTime.getTime() + 9 * 60 * 60 * 1000);
+      scheduleTimeJST = jstTime.toISOString();
+    } else {
+      // For immediate posts, use current JST time
+      const now = new Date();
+      const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+      scheduleTimeJST = jstNow.toISOString();
+    }
+
+    // Create and update timestamps in JST
+    const now = new Date();
+    const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const jstTimestamp = jstNow.toISOString();
+
     const response = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}:append?valueInputOption=RAW`,
       {
@@ -748,14 +798,14 @@ export const addPostToGoogleSheet = async (post: any) => {
               postId,
               post.content,
               platform,
-              post.scheduleTime || new Date().toISOString(),
+              scheduleTimeJST,
               post.status || "pending",
               imageUrl,
               post.imagesCommaSeparated || "",
               post.imagesJsonArray || "",
               "FALSE", // Delete flag
-              new Date().toISOString(),
-              new Date().toISOString(),
+              jstTimestamp, // Created at
+              jstTimestamp, // Updated at
             ],
           ],
         }),
@@ -828,18 +878,33 @@ export const updatePostInGoogleSheet = async (postId: string, updates: any) => {
 
     // Update each matching row
     for (const { index, data } of matchingRows) {
+      // Ensure we have at least 11 columns (A-K)
       const updatedRow = [...data];
+      while (updatedRow.length < 11) {
+        updatedRow.push("");
+      }
 
       if (updates.content !== undefined) updatedRow[1] = updates.content;
-      if (updates.scheduleTime !== undefined)
-        updatedRow[3] = updates.scheduleTime;
+      if (updates.scheduleTime !== undefined) {
+        // Convert to JST for display
+        const scheduleTime =
+          updates.scheduleTime instanceof Date
+            ? updates.scheduleTime
+            : new Date(updates.scheduleTime);
+        const jstTime = new Date(scheduleTime.getTime() + 9 * 60 * 60 * 1000);
+        updatedRow[3] = jstTime.toISOString();
+      }
       if (updates.status !== undefined) updatedRow[4] = updates.status;
       if (updates.deleted !== undefined)
-        updatedRow[6] = updates.deleted ? "TRUE" : "FALSE";
-      updatedRow[8] = new Date().toISOString(); // Update timestamp
+        updatedRow[8] = updates.deleted ? "TRUE" : "FALSE"; // Delete flag is at index 8
+
+      // Update timestamp in JST
+      const now = new Date();
+      const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+      updatedRow[10] = jstNow.toISOString(); // Updated at is at index 10
 
       const updateResponse = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}!A${index}:I${index}?valueInputOption=RAW`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}!A${index}:K${index}?valueInputOption=RAW`,
         {
           method: "PUT",
           headers: {
@@ -855,6 +920,7 @@ export const updatePostInGoogleSheet = async (postId: string, updates: any) => {
       if (!updateResponse.ok) {
         const errorData = await updateResponse.json();
         console.error("Error updating post in sheet:", errorData);
+        addLogEntry("ERROR", "Error updating post in sheet", errorData);
         throw new Error(
           `Failed to update post: ${errorData.error?.message || "Unknown error"}`,
         );
