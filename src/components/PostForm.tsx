@@ -300,8 +300,8 @@ const PostForm: React.FC<PostFormProps> = ({
     try {
       // Build the prompt for AI
       const prompt = buildPrompt(
-        content,
         aiPrompt,
+        content,
         selectedPlatforms,
         platformValidations,
       );
@@ -652,11 +652,11 @@ const PostForm: React.FC<PostFormProps> = ({
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-medium">3. AIアシスタント（オプション）</Label>
                     <div className="text-sm text-muted-foreground">
-                      手動下書きをせず、AI生成する場合はONにしてください
+                      {aiConfigured ? "AI生成する場合は、ベース投稿内容・キーワードとAI への指示を入力して、プラットフォーム別生成ボタンを押してください。" : "AI設定が未設定のため利用できません"}
                     </div>
                   </div>
                   
-                  {aiConfigured && (
+                  {aiConfigured ? (
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="ai-base-content">ベース投稿内容・キーワード</Label>
@@ -667,57 +667,68 @@ const PostForm: React.FC<PostFormProps> = ({
                           id="ai-base-content"
                           placeholder="例：新商品の紹介、イベント告知、キーワードなど..."
                           className="min-h-[100px]"
-                          value={aiPrompt ? content : ''}
-                          onChange={(e) => setContent(e.target.value)}
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="ai-prompt">AI への指示</Label>
-                        <div className="text-sm text-muted-foreground mb-2">
-                          各プラットフォームに合わせてどのように最適化するか指示してください。
-                        </div>
-                        <Input
-                          id="ai-prompt"
-                          placeholder="例：カジュアルに、ビジネス向けに、絵文字を使って、詳しく説明して"
                           value={aiPrompt}
                           onChange={(e) => setAiPrompt(e.target.value)}
                         />
                       </div>
                       
-                      <Button
-                        type="button"
-                        onClick={generateAIDraft}
-                        disabled={
-                          isGeneratingDraft ||
-                          !content ||
-                          !aiPrompt ||
-                          selectedPlatforms.length === 0
-                        }
-                        className="w-full bg-blue-600 hover:bg-blue-700"
-                      >
-                        {isGeneratingDraft ? (
-                          <>
-                            <motion.div
-                              animate={{ rotate: 360 }}
-                              transition={{
-                                duration: 1,
-                                repeat: Infinity,
-                                ease: "linear",
-                              }}
-                              className="mr-2"
-                            >
-                              <Clock size={16} />
-                            </motion.div>
-                            AIコンテンツ生成中...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles size={16} className="mr-2" />
-                            プラットフォーム別生成ボタン
-                          </>
-                        )}
-                      </Button>
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-instruction">AI への指示</Label>
+                        <div className="text-sm text-muted-foreground mb-2">
+                          各プラットフォームに合わせてどのように最適化するか指示してください。
+                        </div>
+                        <Input
+                          id="ai-instruction"
+                          placeholder="例：カジュアルに、ビジネス向けに、絵文字を使って、詳しく説明して"
+                          value={content}
+                          onChange={(e) => setContent(e.target.value)}
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Button
+                          type="button"
+                          onClick={generateAIDraft}
+                          disabled={
+                            isGeneratingDraft ||
+                            !aiPrompt ||
+                            !content ||
+                            selectedPlatforms.length === 0
+                          }
+                          className="w-full bg-blue-600 hover:bg-blue-700"
+                        >
+                          {isGeneratingDraft ? (
+                            <>
+                              <motion.div
+                                animate={{ rotate: 360 }}
+                                transition={{
+                                  duration: 1,
+                                  repeat: Infinity,
+                                  ease: "linear",
+                                }}
+                                className="mr-2"
+                              >
+                                <Clock size={16} />
+                              </motion.div>
+                              AIコンテンツ生成中...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={16} className="mr-2" />
+                              プラットフォーム別生成ボタン
+                            </>
+                          )}
+                        </Button>
+                        <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
+                          ※ボタンを押下すると、プラットフォーム別設定の投稿内容が上書きされるので、下書き等書き込んでいる場合は、別場所に保存するなどしてください。
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                      <p className="text-sm text-muted-foreground text-center">
+                        AI設定を完了すると利用可能になります
+                      </p>
                     </div>
                   )}
                 </div>
@@ -796,7 +807,7 @@ const PostForm: React.FC<PostFormProps> = ({
                         platform as keyof typeof platformValidations
                       ];
                     const platformContentValue =
-                      platformContent[platform] || content;
+                      platformContent[platform] || "";
                     const platformSchedule = platformSchedules[platform] || {
                       date: "",
                       time: "",
