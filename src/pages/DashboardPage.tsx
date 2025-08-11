@@ -121,9 +121,9 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileSpreadsheet className="h-5 w-5" />
-                Google Sheets 作成
+                Google Sheets 作成・管理
               </CardTitle>
-              <CardDescription>新しい投稿管理シートを作成</CardDescription>
+              <CardDescription>投稿管理シートの作成・管理</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
@@ -164,6 +164,32 @@ export default function DashboardPage() {
                 Folderの作成から初めてください。AI設定は、ユーザ設定ページで行います。（AI設定は任意です。）
                 設定完了後、投稿管理を開始できます。
               </p>
+
+              {/* Update History Section */}
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-4">更新履歴</h3>
+                <div className="space-y-4">
+                  <div className="border-l-4 border-blue-500 pl-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold">初版リリース</h4>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        Ver.0
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      2024年12月
+                    </p>
+                    <ul className="text-sm space-y-1">
+                      <li>• SNS投稿作成・管理機能</li>
+                      <li>• Google Sheets連携</li>
+                      <li>• AI生成機能</li>
+                      <li>• 複数プラットフォーム対応</li>
+                      <li>• スケジュール投稿機能</li>
+                    </ul>
+                  </div>
+                  {/* 更新履歴は手動で更新されます。新しいバージョンの情報をここにコピー＆ペーストしてください。 */}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -169,6 +169,37 @@ export default function UserSettingsPage() {
     }
   };
 
+  const handleDeleteAiSettings = async () => {
+    setLoading(true);
+    try {
+      await saveUserSettings({
+        aiService: "",
+        aiModel: "",
+        aiApiToken: "",
+        aiConnectionStatus: false,
+      });
+
+      // Clear form fields
+      setAiService("");
+      setAiModel("");
+      setAiApiToken("");
+      setAiConnectionStatus(false);
+
+      toast({
+        title: "削除完了",
+        description: "AI設定が削除されました",
+      });
+    } catch (error) {
+      toast({
+        title: "削除エラー",
+        description: "AI設定の削除に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -252,14 +283,23 @@ export default function UserSettingsPage() {
                 placeholder="API トークンを入力"
               />
             </div>
-            <Button
-              onClick={handleAiConnectionTest}
-              disabled={aiTesting}
-              variant="outline"
-            >
-              {aiTesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              接続確認
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleAiConnectionTest}
+                disabled={aiTesting}
+                variant="outline"
+              >
+                {aiTesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                接続確認
+              </Button>
+              <Button
+                onClick={handleDeleteAiSettings}
+                disabled={loading}
+                variant="destructive"
+              >
+                AI設定削除
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

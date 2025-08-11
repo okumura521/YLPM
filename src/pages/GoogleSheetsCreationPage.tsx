@@ -164,7 +164,7 @@ export default function GoogleSheetsCreationPage() {
               ← 戻る
             </Button>
             <div className="flex-1">
-              <h1 className="text-3xl font-bold">Google Sheets 新規作成</h1>
+              <h1 className="text-3xl font-bold">Google Sheets 作成・管理</h1>
               <p className="text-muted-foreground mt-2">
                 SNS投稿管理用のGoogle Sheetを作成します
               </p>

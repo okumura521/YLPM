@@ -704,7 +704,7 @@ const Home = () => {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate("/create-sheet")}>
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
-                Google Sheet作成
+                Google Sheets 作成・管理
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
@@ -875,36 +875,6 @@ const Home = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Update History Section */}
-      <Card className="mt-8">
-        <CardHeader>
-          <CardTitle>更新履歴</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="border-l-4 border-blue-500 pl-4">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-semibold">初版リリース</h4>
-                <Badge variant="outline">Ver.0</Badge>
-              </div>
-              <p className="text-sm text-muted-foreground mb-2">2024年12月</p>
-              <ul className="text-sm space-y-1">
-                <li>• SNS投稿作成・管理機能</li>
-                <li>• Google Sheets連携</li>
-                <li>• AI生成機能</li>
-                <li>• 複数プラットフォーム対応</li>
-                <li>• スケジュール投稿機能</li>
-              </ul>
-            </div>
-            <div className="text-xs text-muted-foreground p-3 bg-gray-50 rounded">
-              <p>
-                更新履歴は手動で更新されます。新しいバージョンの情報をここにコピー＆ペーストしてください。
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };
