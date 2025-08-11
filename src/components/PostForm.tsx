@@ -584,12 +584,15 @@ const PostForm: React.FC<PostFormProps> = ({
                 />
               </div>
 
-              {/* 2. Content Form */}
+              {/* 2. Base Content Form */}
               <div className="space-y-2">
-                <Label htmlFor="content">2. 投稿内容</Label>
+                <Label htmlFor="content">2. ベース投稿内容・キーワード</Label>
+                <div className="text-sm text-muted-foreground mb-2">
+                  投稿の基となる内容やキーワードを入力してください。AIが各プラットフォームに最適化したコンテンツを生成します。
+                </div>
                 <Textarea
                   id="content"
-                  placeholder="投稿したい内容を入力してください..."
+                  placeholder="例：新商品の紹介、イベント告知、キーワードなど..."
                   className="min-h-[120px]"
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
@@ -599,9 +602,12 @@ const PostForm: React.FC<PostFormProps> = ({
               {/* 3. AI Prompt */}
               <div className="space-y-2">
                 <Label htmlFor="ai-prompt">3. AI への指示</Label>
+                <div className="text-sm text-muted-foreground mb-2">
+                  各プラットフォームに合わせてどのように最適化するか指示してください。
+                </div>
                 <Input
                   id="ai-prompt"
-                  placeholder="どのように編集して欲しいか指示を入力（例：短くまとめて、詳しく説明して）"
+                  placeholder="例：カジュアルに、ビジネス向けに、絵文字を使って、詳しく説明して"
                   value={aiPrompt}
                   onChange={(e) => setAiPrompt(e.target.value)}
                 />
@@ -609,7 +615,12 @@ const PostForm: React.FC<PostFormProps> = ({
 
               {/* 4. Select Images */}
               <div className="space-y-2">
-                <Label htmlFor="image-select">4. 画像を選択</Label>
+                <Label htmlFor="image-select">
+                  4. 画像を選択（オプション）
+                </Label>
+                <div className="text-sm text-muted-foreground mb-2">
+                  投稿に使用する画像を選択してください。後でプラットフォーム別に使用する画像を選択できます。
+                </div>
                 <div className="flex items-center gap-4">
                   <Button
                     type="button"
@@ -800,6 +811,9 @@ const PostForm: React.FC<PostFormProps> = ({
 
               {/* 6. Generate Draft Button */}
               <div className="space-y-4">
+                <div className="text-sm text-muted-foreground mb-2">
+                  上記の情報を基に、選択したプラットフォーム向けに最適化されたコンテンツを生成します。
+                </div>
                 <Button
                   type="button"
                   onClick={generateAIDraft}
@@ -825,12 +839,12 @@ const PostForm: React.FC<PostFormProps> = ({
                       >
                         <Clock size={16} />
                       </motion.div>
-                      Generating Draft...
+                      AIコンテンツ生成中...
                     </>
                   ) : (
                     <>
                       <Sparkles size={16} className="mr-2" />
-                      6. Generate Draft
+                      6. プラットフォーム別コンテンツ生成
                     </>
                   )}
                 </Button>
