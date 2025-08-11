@@ -10,6 +10,7 @@ import {
   LogOut,
   FileText,
   Trash2,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import PostTable from "./PostTable";
