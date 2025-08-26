@@ -170,12 +170,32 @@ export const saveUserSettings = async (settings: {
     throw error;
   }
 
+  // Clear cache when settings are updated
+  clearUserSettingsCache();
+
   addLogEntry("INFO", "User settings saved successfully", data);
   return data;
 };
 
-// Get user settings
-export const getUserSettings = async () => {
+// Cache for user settings to prevent redundant API calls
+let userSettingsCache: any = null;
+let userSettingsCacheTime: number = 0;
+const CACHE_DURATION = 30000; // 30 seconds
+
+// Get user settings with caching
+export const getUserSettings = async (forceRefresh = false) => {
+  const now = Date.now();
+
+  // Return cached data if available and not expired
+  if (
+    !forceRefresh &&
+    userSettingsCache &&
+    now - userSettingsCacheTime < CACHE_DURATION
+  ) {
+    addLogEntry("INFO", "Returning cached user settings");
+    return userSettingsCache;
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -195,7 +215,19 @@ export const getUserSettings = async () => {
     throw error;
   }
 
+  // Update cache
+  userSettingsCache = data;
+  userSettingsCacheTime = now;
+
+  addLogEntry("INFO", "User settings fetched from database");
   return data;
+};
+
+// Clear user settings cache
+export const clearUserSettingsCache = () => {
+  userSettingsCache = null;
+  userSettingsCacheTime = 0;
+  addLogEntry("INFO", "User settings cache cleared");
 };
 
 // Create Google Drive folder for images
