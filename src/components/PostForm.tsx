@@ -127,6 +127,49 @@ const PostForm: React.FC<PostFormProps> = ({
     defaultValues: undefined,
   });
 
+  // Platform-specific validation rules
+  const platformValidations = {
+    x: { maxLength: 280, name: "X (Twitter)" },
+    instagram: { maxLength: 2200, name: "Instagram" },
+    facebook: { maxLength: 63206, name: "Facebook" },
+    line: { maxLength: 1000, name: "LINE" },
+    discord: { maxLength: 2000, name: "Discord" },
+    wordpress: { maxLength: 100000, name: "WordPress" },
+  };
+
+  // プラットフォーム別の文字数監視と検証
+  const validatePlatformContents = () => {
+    const errors: Record<string, string[]> = {};
+
+    selectedPlatforms.forEach((platform) => {
+      const validation = platformValidations[platform as keyof typeof platformValidations];
+      if (!validation) return;
+
+      const platformContentValue = platformContent[platform] || "";
+      const contentLength = platformContentValue.length;
+
+      if (contentLength > validation.maxLength) {
+        if (!errors[platform]) errors[platform] = [];
+        errors[platform].push(
+          `${validation.name}の文字数制限（${validation.maxLength}文字）を超えています。現在${contentLength}文字です。`
+        );
+      }
+    });
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // プラットフォーム別コンテンツが変更されたときに検証を実行
+  React.useEffect(() => {
+    if (selectedPlatforms.length > 0) {
+      validatePlatformContents();
+    }
+  }, [platformContent, selectedPlatforms]);
+
+  // エラー状態の確認
+  const hasValidationErrors = Object.keys(validationErrors).length > 0;
+
   React.useEffect(() => {
     // 編集モードで、post配列またはinitialDataが渡された場合の処理
     const editData = isEditing
@@ -348,35 +391,6 @@ const PostForm: React.FC<PostFormProps> = ({
     };
   }, []); // 依存配列が空なので、初回マウント時のみ実行される
 
-  // Platform-specific validation rules
-  const platformValidations = {
-    x: { maxLength: 280, name: "X (Twitter)" },
-    instagram: { maxLength: 2200, name: "Instagram" },
-    facebook: { maxLength: 63206, name: "Facebook" },
-    line: { maxLength: 1000, name: "LINE" },
-    discord: { maxLength: 2000, name: "Discord" },
-    wordpress: { maxLength: 100000, name: "WordPress" },
-  };
-
-  const validateContent = (textToValidate?: string) => {
-    const errors: Record<string, string[]> = {};
-    const contentToCheck = textToValidate || content;
-
-    selectedPlatforms.forEach((platform) => {
-      const validation =
-        platformValidations[platform as keyof typeof platformValidations];
-      if (validation && contentToCheck.length > validation.maxLength) {
-        if (!errors[platform]) errors[platform] = [];
-        errors[platform].push(
-          `TargetPlatforms「${validation.name}」の文字数を超えています。`,
-        );
-      }
-    });
-
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     if (files.length > 0) {
@@ -545,7 +559,15 @@ const PostForm: React.FC<PostFormProps> = ({
   };
 
   const handleFormSubmit = async (isDraft = false) => {
-    if (!isDraft && !validateContent()) return;
+    // 下書き保存時は文字数検証をスキップ、確定・投稿時は検証を実行
+    if (!isDraft && !validatePlatformContents()) {
+      toast({
+        title: "文字数制限エラー",
+        description: "一部のプラットフォームで文字数制限を超えています。内容を修正してください。",
+        variant: "destructive",
+      });
+      return;
+    }
 
     // 新規アップロードされた画像と既存の画像URLを統合
     const allImages = [...selectedImages, ...initialImageUrls];
@@ -643,19 +665,10 @@ const PostForm: React.FC<PostFormProps> = ({
     });
   };
 
-  // Validate content on change for Manual Entry tab
-  React.useEffect(() => {
-    if (activeTab === "manual") {
-      validateContent();
-    }
-  }, [content, selectedPlatforms, activeTab]);
-
-  const hasValidationErrors = Object.keys(validationErrors).length > 0;
-
   // 🔹 JSX外（コンポーネント先頭）に関数定義
   const convertDriveUrl = (url: string) => {
     const match = url.match(/[-\w]{25,}/);
-    return match ? `https://lh3.googleusercontent.com/d/$${match[0]}` : url;
+    return match ? `https://lh3.googleusercontent.com/d/${match[0]}` : url;
   };
 
   return (
@@ -964,27 +977,30 @@ const PostForm: React.FC<PostFormProps> = ({
                   </div>
                 </div>
                 {selectedPlatforms.map((platform) => {
-                  const validation =
-                    platformValidations[
-                      platform as keyof typeof platformValidations
-                    ];
+                  const validation = platformValidations[platform as keyof typeof platformValidations];
                   const platformContentValue = platformContent[platform] || "";
                   const platformSchedule = platformSchedules[platform] || {
                     date: "",
                     time: "",
                     enabled: false,
                   };
+                  const hasError = validationErrors[platform] && validationErrors[platform].length > 0;
 
                   return (
-                    <Card key={platform} className="p-4">
+                    <Card key={platform} className={`p-4 ${hasError ? 'border-red-300 bg-red-50' : ''}`}>
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                          <Badge variant="outline">
+                          <Badge variant={hasError ? "destructive" : "outline"}>
                             {validation?.name || platform}
                           </Badge>
-                          <span className="text-xs text-muted-foreground">
+                          <span className={`text-xs ${hasError ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
                             {platformContentValue.length}/
                             {validation?.maxLength || "∞"} 文字
+                            {hasError && (
+                              <span className="ml-2 text-red-600">
+                                (制限超過)
+                              </span>
+                            )}
                           </span>
                         </div>
 
@@ -997,8 +1013,18 @@ const PostForm: React.FC<PostFormProps> = ({
                             onChange={(e) =>
                               updatePlatformContent(platform, e.target.value)
                             }
-                            className="min-h-[100px]"
+                            className={`min-h-[100px] ${hasError ? 'border-red-300 focus:border-red-500' : ''}`}
                           />
+                          {hasError && (
+                            <div className="text-sm text-red-600">
+                              {validationErrors[platform].map((error, index) => (
+                                <div key={index} className="flex items-center gap-1">
+                                  <AlertTriangle size={14} />
+                                  {error}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {/* Image selection for platform */}
@@ -1114,24 +1140,40 @@ const PostForm: React.FC<PostFormProps> = ({
             )}
           </div>
         </div>
+
         {/* Validation Alerts */}
         {hasValidationErrors && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              <h4 className="font-semibold mb-1">入力内容に不備があります</h4>
-              {Object.entries(validationErrors).map(([platform, errors]) => (
-                <div key={platform} className="mb-1">
-                  <span className="font-medium">{platform}</span>
-                  <ul className="list-disc list-inside ml-2">
-                    {errors.map((error, index) => (
-                      <li key={index} className="text-sm">
-                        {error}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+              <h4 className="font-semibold mb-1">文字数制限エラー</h4>
+              <p className="text-sm mb-2">
+                以下のプラットフォームで文字数制限を超えています。内容を修正してから投稿してください。
+              </p>
+              {Object.entries(validationErrors).map(([platform, errors]) => {
+                const platformInfo = {
+                  x: "X (Twitter)",
+                  instagram: "Instagram",
+                  facebook: "Facebook",
+                  line: "LINE",
+                  discord: "Discord",
+                  wordpress: "WordPress",
+                };
+                const platformName = platformInfo[platform as keyof typeof platformInfo] || platform;
+                
+                return (
+                  <div key={platform} className="mb-2 p-2 bg-red-100 rounded border border-red-200">
+                    <span className="font-medium text-red-800">{platformName}</span>
+                    <ul className="list-disc list-inside ml-2 mt-1">
+                      {errors.map((error, index) => (
+                        <li key={index} className="text-sm text-red-700">
+                          {error}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
             </AlertDescription>
           </Alert>
         )}
@@ -1149,8 +1191,7 @@ const PostForm: React.FC<PostFormProps> = ({
             variant="secondary"
             disabled={
               selectedPlatforms.length === 0 ||
-              isGeneratingDraft ||
-              hasValidationErrors
+              isGeneratingDraft
             }
           >
             下書き保存
