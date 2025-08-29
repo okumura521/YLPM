@@ -39,6 +39,8 @@ import {
   addPostToGoogleSheet,
   addLogEntry,
   getUserSettings,
+  uploadImageAndGenerateId,
+  getImagesInfoByIds,
 } from "@/lib/supabase";
 import { callAI, buildPrompt } from "@/lib/aiProviders";
 import { useToast } from "@/components/ui/use-toast";
@@ -68,12 +70,10 @@ interface PostData {
     string,
     { date: string; time: string; enabled: boolean }
   >;
-  imagesCommaSeparated?: string;
-  imagesJsonArray?: string;
   status?: "pending" | "sent" | "failed" | "draft";
-  // 追加: データベースから取得した画像URLのリスト
-  imageUrl?: string;
-  imageUrls?: string[];
+  // 新しい画像管理システム
+  imageIds?: string[]; // 画像IDの配列
+  platformImageIds?: Record<string, string[]>; // プラットフォーム別の画像ID
 }
 
 const PostForm: React.FC<PostFormProps> = ({
@@ -98,7 +98,8 @@ const PostForm: React.FC<PostFormProps> = ({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [initialImageUrls, setInitialImageUrls] = useState<string[]>([]);
+  const [imageIds, setImageIds] = useState<string[]>([]); // 画像IDの配列
+  const [imageInfoMap, setImageInfoMap] = useState<Record<string, { imageId: string; fileName: string; imageUrl: string }>>({});
   const [platformContent, setPlatformContent] = useState<
     Record<string, string>
   >({});
@@ -118,6 +119,7 @@ const PostForm: React.FC<PostFormProps> = ({
   const [aiConfigured, setAiConfigured] = useState<boolean>(false);
   const [loadingAiSettings, setLoadingAiSettings] = useState<boolean>(true);
   const [imageLoadError, setImageLoadError] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const {
     register,
@@ -171,17 +173,18 @@ const PostForm: React.FC<PostFormProps> = ({
   const hasValidationErrors = Object.keys(validationErrors).length > 0;
 
   React.useEffect(() => {
-    // 編集モードで、post配列またはinitialDataが渡された場合の処理
-    const editData = isEditing
-      ? post ||
-        (Array.isArray(initialData)
-          ? initialData
-          : initialData
-            ? [initialData]
-            : [])
-      : [];
+    const initializeForm = async () => {
+      // 編集モードで、post配列またはinitialDataが渡された場合の処理
+      const editData = isEditing
+        ? post ||
+          (Array.isArray(initialData)
+            ? initialData
+            : initialData
+              ? [initialData]
+              : [])
+        : [];
 
-    if (isEditing && editData && editData.length > 0) {
+      if (isEditing && editData && editData.length > 0) {
       const primaryPost = editData[0];
 
       addLogEntry("INFO", "Post data received for editing", {
@@ -190,7 +193,7 @@ const PostForm: React.FC<PostFormProps> = ({
           id: primaryPost.id,
           hasPlatforms: !!primaryPost.platforms,
           platformsType: typeof primaryPost.platforms,
-          imageUrlsCount: primaryPost.imageUrls?.length || 0,
+          imageIdsCount: primaryPost.imageIds?.length || 0,
         },
       });
 
@@ -253,16 +256,62 @@ const PostForm: React.FC<PostFormProps> = ({
           setContent(platformsData[firstPlatform].content || "");
         }
 
-        // 画像URLの処理
-        const allImageUrls = primaryPost.imageUrls || [];
-        setInitialImageUrls(allImageUrls);
-        setImagePreviews(allImageUrls);
+                 // 画像IDの処理 - プラットフォーム別のimageUrlsから取得
+         const allImageIds: string[] = [];
+         const platformImageIds: Record<string, string[]> = {};
+         
+         // 各プラットフォームのimageUrlsから画像IDを収集
+         availablePlatforms.forEach(platform => {
+           const platformData = platformsData[platform];
+           if (platformData.imageUrls && Array.isArray(platformData.imageUrls)) {
+             platformImageIds[platform] = platformData.imageUrls;
+             allImageIds.push(...platformData.imageUrls);
+           }
+         });
+         
+         // 重複を除去
+         const uniqueImageIds = [...new Set(allImageIds)];
+         setImageIds(uniqueImageIds);
+         
+         addLogEntry("INFO", "Processing image IDs for edit", {
+           uniqueImageIds,
+           platformImageIds,
+           availablePlatforms
+         });
+         
+         // 画像IDから画像情報を取得
+         if (uniqueImageIds.length > 0) {
+           const imageInfoResult = await getImagesInfoByIds(uniqueImageIds);
+           if (imageInfoResult.success) {
+             const newImageInfoMap: Record<string, { imageId: string; fileName: string; imageUrl: string }> = {};
+             const newImagePreviews: string[] = [];
+             
+             imageInfoResult.images.forEach((imageInfo: any) => {
+               if (imageInfo.imageUrl && !imageInfo.error) {
+                 newImageInfoMap[imageInfo.imageId] = {
+                   imageId: imageInfo.imageId,
+                   fileName: imageInfo.fileName,
+                   imageUrl: imageInfo.imageUrl,
+                 };
+                 newImagePreviews.push(imageInfo.imageUrl);
+               }
+             });
+             
+             setImageInfoMap(newImageInfoMap);
+             setImagePreviews(newImagePreviews);
+             
+             addLogEntry("INFO", "Image info loaded for edit", {
+               imageCount: newImagePreviews.length,
+               imageIds: Object.keys(newImageInfoMap)
+             });
+           }
+         }
 
-        addLogEntry("INFO", "Platform-specific data processed for edit", {
-          availablePlatforms,
-          platformContentKeys: Object.keys(newPlatformContent),
-          totalImageUrls: allImageUrls.length,
-        });
+                 addLogEntry("INFO", "Platform-specific data processed for edit", {
+           availablePlatforms,
+           platformContentKeys: Object.keys(newPlatformContent),
+           totalImageIds: uniqueImageIds.length,
+         });
       } else {
         // 従来の形式: 配列形式のプラットフォーム
         setContent(primaryPost.content || "");
@@ -275,25 +324,44 @@ const PostForm: React.FC<PostFormProps> = ({
           string,
           { date: string; time: string; enabled: boolean }
         > = {};
-        const newImageUrls: string[] = [];
+        const newImageIds: string[] = [];
 
-        // 既存の画像URLを管理するための新しいステートを設定
-        const uniqueImageUrls = [
+        // 既存の画像IDを管理するための新しいステートを設定
+        const uniqueImageIds = [
           ...new Set(
             editData.flatMap((p) => {
-              if (p.imageUrl) {
-                return p.imageUrl.split(",").filter((url) => url.trim());
-              }
-              if (p.imageUrls) {
-                return p.imageUrls.filter((url) => url.trim());
+              if (p.imageIds) {
+                return p.imageIds.filter((id) => id.trim());
               }
               return [];
             }),
           ),
         ];
 
-        setInitialImageUrls(uniqueImageUrls);
-        setImagePreviews(uniqueImageUrls);
+        setImageIds(uniqueImageIds);
+        
+        // 画像IDから画像情報を取得
+        if (uniqueImageIds.length > 0) {
+          const imageInfoResult = await getImagesInfoByIds(uniqueImageIds);
+          if (imageInfoResult.success) {
+            const newImageInfoMap: Record<string, { imageId: string; fileName: string; imageUrl: string }> = {};
+            const newImagePreviews: string[] = [];
+            
+            imageInfoResult.images.forEach((imageInfo: any) => {
+              if (imageInfo.imageUrl && !imageInfo.error) {
+                newImageInfoMap[imageInfo.imageId] = {
+                  imageId: imageInfo.imageId,
+                  fileName: imageInfo.fileName,
+                  imageUrl: imageInfo.imageUrl,
+                };
+                newImagePreviews.push(imageInfo.imageUrl);
+              }
+            });
+            
+            setImageInfoMap(newImageInfoMap);
+            setImagePreviews(newImagePreviews);
+          }
+        }
 
         editData.forEach((p) => {
           const platform = Array.isArray(p.platforms)
@@ -318,13 +386,9 @@ const PostForm: React.FC<PostFormProps> = ({
               };
             }
 
-            // 画像URLを設定
-            if (p.imageUrl) {
-              const urls = p.imageUrl.split(",").filter((url) => url.trim());
-              newImageUrls.push(...urls);
-            }
-            if (p.imageUrls) {
-              newImageUrls.push(...p.imageUrls.filter((url) => url.trim()));
+            // 画像IDを設定
+            if (p.imageIds) {
+              newImageIds.push(...p.imageIds.filter((id) => id.trim()));
             }
           }
         });
@@ -343,9 +407,13 @@ const PostForm: React.FC<PostFormProps> = ({
       setScheduleDate("");
       setScheduleTime("");
       setImagePreviews([]);
-      setInitialImageUrls([]);
+      setImageIds([]);
+      setImageInfoMap({});
     }
-  }, [post, initialData, isEditing]);
+  };
+
+  initializeForm();
+}, [post, initialData, isEditing]);
 
   // AI 設定の読み込みは、コンポーネントのマウント時に一度だけ実行する
   React.useEffect(() => {
@@ -391,11 +459,12 @@ const PostForm: React.FC<PostFormProps> = ({
     };
   }, []); // 依存配列が空なので、初回マウント時のみ実行される
 
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     if (files.length > 0) {
       setSelectedImages((prev) => [...prev, ...files]);
 
+      // プレビュー用にファイルを読み込み（新規投稿時はローカルURLを使用）
       files.forEach((file) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -428,6 +497,37 @@ const PostForm: React.FC<PostFormProps> = ({
           [platform]: [...current, image],
         };
       }
+    });
+  };
+
+  const toggleExistingImageForPlatform = (imageIndex: number, platform: string) => {
+    setPlatformImages((prev) => {
+      const current = prev[platform] || [];
+      const existingImageUrl = imagePreviews[imageIndex];
+      
+      // 既存画像のURLから画像IDを取得
+      const imageId = Object.keys(imageInfoMap).find(id => 
+        imageInfoMap[id].imageUrl === existingImageUrl
+      );
+      
+      if (imageId) {
+        // 既に選択されている場合は削除
+        const exists = current.some((img) => img.name === imageInfoMap[imageId].fileName);
+        if (exists) {
+          return {
+            ...prev,
+            [platform]: current.filter((img) => img.name !== imageInfoMap[imageId].fileName),
+          };
+        } else {
+          // 選択されていない場合は追加（ダミーファイルオブジェクトを作成）
+          const dummyFile = new File([], imageInfoMap[imageId].fileName, { type: 'image/jpeg' });
+          return {
+            ...prev,
+            [platform]: [...current, dummyFile],
+          };
+        }
+      }
+      return prev;
     });
   };
 
@@ -559,30 +659,50 @@ const PostForm: React.FC<PostFormProps> = ({
   };
 
   const handleFormSubmit = async (isDraft = false) => {
-    // 下書き保存時は文字数検証をスキップ、確定・投稿時は検証を実行
-    if (!isDraft && !validatePlatformContents()) {
-      toast({
-        title: "文字数制限エラー",
-        description: "一部のプラットフォームで文字数制限を超えています。内容を修正してください。",
-        variant: "destructive",
+    setIsSubmitting(true);
+    
+    try {
+      // 下書き保存時は文字数検証をスキップ、確定・投稿時は検証を実行
+      if (!isDraft && !validatePlatformContents()) {
+        toast({
+          title: "文字数制限エラー",
+          description: "一部のプラットフォームで文字数制限を超えています。内容を修正してください。",
+          variant: "destructive",
+        });
+        return;
+      }
+
+    // 新規アップロードされた画像を処理（選択された画像のみ）
+    const newImageIds: string[] = [];
+    const selectedImageFiles: File[] = [];
+    
+    // 各プラットフォームで選択された画像を収集（重複除去済み）
+    const platformImageSet = new Set<string>();
+    selectedPlatforms.forEach(platform => {
+      const platformSelectedImages = platformImages[platform] || [];
+      platformSelectedImages.forEach(image => {
+        if (!platformImageSet.has(image.name)) {
+          platformImageSet.add(image.name);
+          selectedImageFiles.push(image);
+        }
       });
-      return;
+    });
+    
+    // 選択された画像のみをアップロード
+    for (const image of selectedImageFiles) {
+      const uploadResult = await uploadImageAndGenerateId(image);
+      if (uploadResult.success) {
+        newImageIds.push(uploadResult.imageId);
+        addLogEntry("INFO", "Selected image uploaded", {
+          fileName: image.name,
+          imageId: uploadResult.imageId,
+          platform: selectedPlatforms.find(p => platformImages[p]?.some(img => img.name === image.name))
+        });
+      }
     }
 
-    // 新規アップロードされた画像と既存の画像URLを統合
-    const allImages = [...selectedImages, ...initialImageUrls];
-
-    // 統合した画像のリストからファイル名/URLを取得
-    const allImageNames = allImages.map((img) => {
-      // Fileオブジェクトか、既存のURLかを判断して適切な値を返す
-      if (typeof img === "string") {
-        return img;
-      }
-      return img.name;
-    });
-
-    const imagesCommaSeparated = allImageNames.join(",");
-    const imagesJsonArray = JSON.stringify(allImageNames);
+    // 既存の画像IDと新規画像IDを統合
+    const allImageIds = [...imageIds, ...newImageIds];
 
     // Generate a single base ID for all platforms
     const baseId = isEditing
@@ -629,6 +749,7 @@ const PostForm: React.FC<PostFormProps> = ({
         platformContent, // 全プラットフォームの内容を送信
         platformImages,
         platformSchedules,
+        imageIds: allImageIds, // 画像IDの配列
         status: isDraft ? "draft" : "pending",
         id: `${baseId}_${platform}`, // IDにプラットフォームサフィックスを付与
       };
@@ -663,10 +784,26 @@ const PostForm: React.FC<PostFormProps> = ({
         ? "投稿が正常に更新されました"
         : "投稿が正常に作成されました",
     });
-  };
+  } catch (error) {
+    console.error("Form submission error:", error);
+    addLogEntry("ERROR", "Form submission failed", error);
+    toast({
+      title: "投稿エラー",
+      description: "投稿の処理中にエラーが発生しました",
+      variant: "destructive",
+    });
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   // 🔹 JSX外（コンポーネント先頭）に関数定義
   const convertDriveUrl = (url: string) => {
+    // 新規投稿時はローカルURLをそのまま使用
+    if (url.startsWith('data:')) {
+      return url;
+    }
+    // 編集時はGoogle Drive URLを変換
     const match = url.match(/[-\w]{25,}/);
     return match ? `https://lh3.googleusercontent.com/d/${match[0]}` : url;
   };
@@ -1032,54 +1169,71 @@ const PostForm: React.FC<PostFormProps> = ({
                           <div className="space-y-2">
                             <Label>使用する画像</Label>
                             <div className="grid grid-cols-4 gap-2">
-                              {imagePreviews.map((preview, index) => {
-                                // 新規アップロード画像の場合
-                                const isNewImage =
-                                  index < selectedImages.length;
-                                const isSelected = isNewImage
-                                  ? platformImages[platform]?.some(
-                                      (img) =>
-                                        img.name ===
-                                        selectedImages[index]?.name,
-                                    ) || false
-                                  : true; // 既存画像は常に選択状態として表示
-
-                                return (
-                                  <div key={index} className="relative">
-                                    <img
-                                      src={convertDriveUrl(preview)}
-                                      alt={`Image ${index + 1}`}
-                                      className={`w-full h-16 object-cover rounded-md cursor-pointer border-2 ${
-                                        isSelected
-                                          ? "border-primary"
-                                          : "border-gray-200"
-                                      }`}
-                                      onClick={() => {
-                                        if (isNewImage) {
-                                          toggleImageForPlatform(
-                                            index,
-                                            platform,
+                                                             {imagePreviews.map((preview, index) => {
+                                                                   // 新規アップロード画像の場合
+                                  const isNewImage = index < selectedImages.length;
+                                  const isSelected = isNewImage
+                                    ? platformImages[platform]?.some(
+                                        (img) =>
+                                          img.name === selectedImages[index]?.name,
+                                      ) || false
+                                    : platformImages[platform]?.some(
+                                        (img) => {
+                                          const existingImageUrl = imagePreviews[index];
+                                          const imageId = Object.keys(imageInfoMap).find(id => 
+                                            imageInfoMap[id].imageUrl === existingImageUrl
                                           );
+                                          return imageId && img.name === imageInfoMap[imageId].fileName;
                                         }
-                                      }}
-                                    />
-                                    {isSelected && (
-                                      <div className="absolute top-1 right-1 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
-                                        ✓
-                                      </div>
-                                    )}
-                                    {!isNewImage && (
-                                      <div className="absolute bottom-1 left-1 bg-blue-500 text-white rounded px-1 text-xs">
-                                        既存
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                                      ) || false;
+
+                                                                   return (
+                                    <div key={index} className="relative">
+                                      <img
+                                        src={convertDriveUrl(preview)}
+                                        alt={`Image ${index + 1}`}
+                                        className={`w-full h-16 object-cover rounded-md cursor-pointer border-2 ${
+                                          isSelected
+                                            ? "border-primary"
+                                            : "border-gray-200"
+                                        }`}
+                                        onClick={() => {
+                                          if (isNewImage) {
+                                            toggleImageForPlatform(
+                                              index,
+                                              platform,
+                                            );
+                                          } else {
+                                            // 既存画像の選択解除
+                                            toggleExistingImageForPlatform(
+                                              index,
+                                              platform,
+                                            );
+                                          }
+                                        }}
+                                      />
+                                      {isSelected && (
+                                        <div className="absolute top-1 right-1 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
+                                          ✓
+                                        </div>
+                                      )}
+                                      {!isNewImage && (
+                                        <div className="absolute bottom-1 left-1 bg-blue-500 text-white rounded px-1 text-xs">
+                                          既存
+                                        </div>
+                                      )}
+                                      {isNewImage && !isSelected && (
+                                        <div className="absolute bottom-1 right-1 bg-gray-500 text-white rounded px-1 text-xs">
+                                          未選択
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                               })}
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              ※既存画像は自動的に選択されています。新規アップロード画像はクリックして選択してください。
-                            </div>
+                                                         <div className="text-xs text-muted-foreground">
+                               ※既存画像は自動的に選択されています。新規アップロード画像はクリックして選択してください。チェックが付いていない画像は保存されません。
+                             </div>
                           </div>
                         )}
 
@@ -1185,29 +1339,67 @@ const PostForm: React.FC<PostFormProps> = ({
           <Button type="button" variant="outline" onClick={onCancel}>
             キャンセル
           </Button>
-          <Button
-            type="button"
-            onClick={() => handleFormSubmit(true)}
-            variant="secondary"
-            disabled={
-              selectedPlatforms.length === 0 ||
-              isGeneratingDraft
-            }
-          >
-            下書き保存
-          </Button>
-          <Button
-            type="button"
-            onClick={() => handleFormSubmit(false)}
-            disabled={
-              selectedPlatforms.length === 0 ||
-              isGeneratingDraft ||
-              hasValidationErrors
-            }
-          >
-            <Send className="mr-2 h-4 w-4" />
-            {isEditing ? "投稿を更新" : "確定"}
-          </Button>
+                     <Button
+             type="button"
+             onClick={() => handleFormSubmit(true)}
+             variant="secondary"
+             disabled={
+               selectedPlatforms.length === 0 ||
+               isGeneratingDraft ||
+               isSubmitting
+             }
+           >
+             {isSubmitting ? (
+               <>
+                 <motion.div
+                   animate={{ rotate: 360 }}
+                   transition={{
+                     duration: 1,
+                     repeat: Infinity,
+                     ease: "linear",
+                   }}
+                   className="mr-2"
+                 >
+                   <Clock size={16} />
+                 </motion.div>
+                 処理中...
+               </>
+             ) : (
+               "下書き保存"
+             )}
+           </Button>
+           <Button
+             type="button"
+             onClick={() => handleFormSubmit(false)}
+             disabled={
+               selectedPlatforms.length === 0 ||
+               isGeneratingDraft ||
+               hasValidationErrors ||
+               isSubmitting
+             }
+           >
+             {isSubmitting ? (
+               <>
+                 <motion.div
+                   animate={{ rotate: 360 }}
+                   transition={{
+                     duration: 1,
+                     repeat: Infinity,
+                     ease: "linear",
+                   }}
+                   className="mr-2"
+                 >
+                   <Clock size={16} />
+                 </motion.div>
+                 処理中...
+               </>
+             ) : (
+               <>
+                 <Send className="mr-2 h-4 w-4" />
+                 {isEditing ? "投稿を更新" : "確定"}
+               </>
+             )}
+           </Button>
         </div>
       </div>
     </div>
