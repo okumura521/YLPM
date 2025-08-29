@@ -170,12 +170,32 @@ export const saveUserSettings = async (settings: {
     throw error;
   }
 
+  // Clear cache when settings are updated
+  clearUserSettingsCache();
+
   addLogEntry("INFO", "User settings saved successfully", data);
   return data;
 };
 
-// Get user settings
-export const getUserSettings = async () => {
+// Cache for user settings to prevent redundant API calls
+let userSettingsCache: any = null;
+let userSettingsCacheTime: number = 0;
+const CACHE_DURATION = 30000; // 30 seconds
+
+// Get user settings with caching
+export const getUserSettings = async (forceRefresh = false) => {
+  const now = Date.now();
+
+  // Return cached data if available and not expired
+  if (
+    !forceRefresh &&
+    userSettingsCache &&
+    now - userSettingsCacheTime < CACHE_DURATION
+  ) {
+    addLogEntry("INFO", "Returning cached user settings");
+    return userSettingsCache;
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -195,7 +215,19 @@ export const getUserSettings = async () => {
     throw error;
   }
 
+  // Update cache
+  userSettingsCache = data;
+  userSettingsCacheTime = now;
+
+  addLogEntry("INFO", "User settings fetched from database");
   return data;
+};
+
+// Clear user settings cache
+export const clearUserSettingsCache = () => {
+  userSettingsCache = null;
+  userSettingsCacheTime = 0;
+  addLogEntry("INFO", "User settings cache cleared");
 };
 
 // Create Google Drive folder for images
@@ -392,14 +424,33 @@ export const createGoogleSheetWithOAuth = async (
                         },
                         { userEnteredValue: { stringValue: "予定時刻" } },
                         { userEnteredValue: { stringValue: "ステータス" } },
-                        { userEnteredValue: { stringValue: "画像URL" } },
+                        { userEnteredValue: { stringValue: "画像ID" } },
                         {
-                          userEnteredValue: { stringValue: "画像カンマ区切り" },
+                          userEnteredValue: { stringValue: "Reserved" },
                         },
-                        { userEnteredValue: { stringValue: "画像JSON配列" } },
+                        { userEnteredValue: { stringValue: "Reserved" } },
                         { userEnteredValue: { stringValue: "削除フラグ" } },
                         { userEnteredValue: { stringValue: "作成日時" } },
                         { userEnteredValue: { stringValue: "更新日時" } },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              properties: {
+                title: "画像アップロードリスト",
+              },
+              data: [
+                {
+                  rowData: [
+                    {
+                      values: [
+                        { userEnteredValue: { stringValue: "画像ID" } },
+                        { userEnteredValue: { stringValue: "ファイル名" } },
+                        { userEnteredValue: { stringValue: "画像URL" } },
+                        { userEnteredValue: { stringValue: "アップロード日時" } },
                       ],
                     },
                   ],
@@ -697,44 +748,31 @@ export const addPostToGoogleSheet = async (post: any) => {
 
     const accessToken = await getGoogleAccessToken();
 
-    // Upload images if present and associate them with the post ID
-    let imageUrls: string[] = [];
-    if (
-      post.images &&
-      post.images.length > 0 &&
-      settings.google_drive_folder_id
-    ) {
+    // 画像アップロードリストシートを初期化
+    await initializeImageUploadListSheet();
+
+    // 新しい画像をアップロードして画像IDを生成
+    let imageIds: string[] = [];
+    if (post.images && post.images.length > 0) {
       for (const image of post.images) {
-        // Create a unique filename: {baseId}_{timestamp}_{originalName}
-        const originalName = image.name;
-        const baseId = post.id.includes("_") ? post.id.split("_")[0] : post.id;
-        const timestamp = Date.now();
-        const uniqueFileName = `${baseId}_${timestamp}_${originalName}`;
-
-        // Create a new File object with the unique name
-        const renamedFile = new File([image], uniqueFileName, {
-          type: image.type,
-        });
-
-        const uploadResult = await uploadImageToGoogleDrive(
-          accessToken,
-          renamedFile,
-          settings.google_drive_folder_id,
-        );
+        const uploadResult = await uploadImageAndGenerateId(image);
         if (uploadResult.success) {
-          imageUrls.push(uploadResult.directUrl || "");
-          addLogEntry("INFO", "Image uploaded with post association", {
+          imageIds.push(uploadResult.imageId);
+          addLogEntry("INFO", "Image uploaded and ID generated", {
             postId: post.id,
-            baseId,
-            originalName,
-            uniqueFileName,
-            imageUrl: uploadResult.directUrl,
+            imageId: uploadResult.imageId,
+            fileName: uploadResult.fileName,
           });
         }
       }
     }
 
-    const imageUrl = imageUrls.join(",");
+    // 既存の画像IDがあれば追加
+    if (post.imageIds && Array.isArray(post.imageIds)) {
+      imageIds = [...imageIds, ...post.imageIds];
+    }
+
+    const imageIdsString = imageIds.join(",");
     const sheetName = encodeURIComponent("投稿データ");
 
     // Ensure the post ID is properly formatted
@@ -792,7 +830,7 @@ export const addPostToGoogleSheet = async (post: any) => {
               platform,
               scheduleTimeJST,
               post.status || "pending",
-              imageUrl,
+              imageIdsString, // 画像ID（カンマ区切り）
               "", // Reserved for future use
               "", // Reserved for future use
               "FALSE", // Delete flag
@@ -816,8 +854,8 @@ export const addPostToGoogleSheet = async (post: any) => {
     addLogEntry("INFO", "Post added to Google Sheet successfully", {
       postId: postId,
       platform: platform,
-      imageUrl,
-      imageCount: imageUrls.length,
+      imageIds: imageIds,
+      imageCount: imageIds.length,
     });
     return { success: true };
   } catch (error) {
@@ -992,6 +1030,10 @@ export const fetchPostsFromGoogleSheet = async () => {
         const utcTime = new Date(row[3] || new Date().toISOString());
         const jstTime = new Date(utcTime.getTime() + 9 * 60 * 60 * 1000);
 
+        // 画像IDを解析
+        const imageIdsString = row[5] || "";
+        const imageIds = imageIdsString ? imageIdsString.split(",").map(id => id.trim()).filter(id => id) : [];
+
         postsMap.set(baseId, {
           id: baseId,
           content: row[1] || "",
@@ -999,7 +1041,7 @@ export const fetchPostsFromGoogleSheet = async () => {
           scheduleTime: jstTime.toISOString(),
           status:
             (row[4] as "pending" | "sent" | "failed" | "draft") || "pending",
-          imageUrl: row[5] || "",
+          imageIds: imageIds, // 画像IDの配列
           updatedAt: row[10] || row[9] || new Date().toISOString(), // Updated at is at index 10
         });
       }
@@ -1141,4 +1183,324 @@ export const addLogEntry = (type: string, message: string, data?: any) => {
 // Clear logs
 export const clearLogs = () => {
   localStorage.removeItem("ylpm_logs");
+};
+
+// ===== 画像管理機能 =====
+
+// 画像アップロードリストシートを作成・初期化
+export const initializeImageUploadListSheet = async () => {
+  try {
+    const settings = await getUserSettings();
+    if (!settings?.google_sheet_id) {
+      addLogEntry("ERROR", "Google Sheet not configured for image upload list initialization");
+      throw new Error("Google Sheet not configured");
+    }
+
+    const accessToken = await getGoogleAccessToken();
+    const sheetId = settings.google_sheet_id;
+
+    // 画像アップロードリストシートのヘッダーを設定
+    const headers = [
+      "画像ID",
+      "ファイル名", 
+      "画像URL",
+      "アップロード日時"
+    ];
+
+         // シートが存在するかチェック
+     const checkResponse = await fetch(
+       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`,
+       {
+         headers: {
+           Authorization: `Bearer ${accessToken}`,
+         },
+       }
+     );
+
+    if (!checkResponse.ok) {
+      throw new Error("Failed to check sheet existence");
+    }
+
+    const sheetsData = await checkResponse.json();
+    const imageSheetExists = sheetsData.sheets.some(
+      (sheet: any) => sheet.properties.title === "画像アップロードリスト"
+    );
+
+    if (!imageSheetExists) {
+      // 新しいシートを作成
+      const createResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            requests: [
+              {
+                addSheet: {
+                  properties: {
+                    title: "画像アップロードリスト",
+                  },
+                },
+              },
+            ],
+          }),
+        }
+      );
+
+      if (!createResponse.ok) {
+        throw new Error("Failed to create image upload list sheet");
+      }
+
+      // ヘッダーを設定
+      const headerResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/画像アップロードリスト!A1:D1?valueInputOption=RAW`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            values: [headers],
+          }),
+        }
+      );
+
+      if (!headerResponse.ok) {
+        throw new Error("Failed to set image upload list headers");
+      }
+    }
+
+    addLogEntry("INFO", "Image upload list sheet initialized successfully");
+    return { success: true };
+  } catch (error) {
+    console.error("Error initializing image upload list sheet:", error);
+    addLogEntry("ERROR", "Error initializing image upload list sheet", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+// 画像をアップロードして画像IDを生成
+export const uploadImageAndGenerateId = async (file: File) => {
+  try {
+    const settings = await getUserSettings();
+    if (!settings?.google_drive_folder_id) {
+      addLogEntry("ERROR", "Google Drive folder not configured for image upload");
+      throw new Error("Google Drive folder not configured");
+    }
+
+    if (!settings?.google_sheet_id) {
+      addLogEntry("ERROR", "Google Sheet not configured for image upload");
+      throw new Error("Google Sheet not configured");
+    }
+
+    const accessToken = await getGoogleAccessToken();
+
+    // 画像アップロードリストシートを初期化
+    await initializeImageUploadListSheet();
+
+    // 画像IDを生成（タイムスタンプ + ランダム文字列）
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 8);
+    const imageId = `img_${timestamp}_${randomString}`;
+
+    // Google Driveにアップロード
+    const uploadResult = await uploadImageToGoogleDrive(
+      accessToken,
+      file,
+      settings.google_drive_folder_id
+    );
+
+    if (!uploadResult.success) {
+      addLogEntry("ERROR", "Google Drive upload failed", {
+        fileName: file.name,
+        error: uploadResult.message || "Unknown error",
+      });
+      throw new Error(uploadResult.message || "Failed to upload image");
+    }
+
+         // 画像アップロードリストに追加
+     const sheetId = settings.google_sheet_id;
+     const uploadTime = new Date().toISOString();
+     
+     const addImageResponse = await fetch(
+       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/画像アップロードリスト!A:D:append?valueInputOption=RAW`,
+       {
+         method: "POST",
+         headers: {
+           Authorization: `Bearer ${accessToken}`,
+           "Content-Type": "application/json",
+         },
+         body: JSON.stringify({
+           values: [[
+             imageId,
+             file.name,
+             uploadResult.directUrl || uploadResult.fileUrl,
+             uploadTime
+           ]],
+         }),
+       }
+     );
+
+    if (!addImageResponse.ok) {
+      const errorData = await addImageResponse.json().catch(() => ({}));
+      addLogEntry("ERROR", "Failed to add image to upload list", {
+        fileName: file.name,
+        imageId,
+        responseStatus: addImageResponse.status,
+        errorData,
+      });
+      throw new Error("Failed to add image to upload list");
+    }
+
+    addLogEntry("INFO", "Image uploaded and ID generated successfully", {
+      imageId,
+      fileName: file.name,
+      fileUrl: uploadResult.directUrl || uploadResult.fileUrl,
+    });
+
+    return {
+      success: true,
+      imageId,
+      fileName: file.name,
+      imageUrl: uploadResult.directUrl || uploadResult.fileUrl,
+      uploadTime,
+    };
+  } catch (error) {
+    console.error("Error uploading image and generating ID:", error);
+    addLogEntry("ERROR", "Error uploading image and generating ID", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+    });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+// 画像IDから画像情報を取得
+export const getImageInfoById = async (imageId: string) => {
+  try {
+    const settings = await getUserSettings();
+    if (!settings?.google_sheet_id) {
+      throw new Error("Google Sheet not configured");
+    }
+
+    const accessToken = await getGoogleAccessToken();
+    const sheetId = settings.google_sheet_id;
+
+    // 画像アップロードリストから画像IDで検索
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/画像アップロードリスト!A:D`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch image upload list");
+    }
+
+    const data = await response.json();
+    const rows = data.values || [];
+
+    // ヘッダーをスキップして画像IDで検索
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row[0] === imageId) {
+        return {
+          success: true,
+          imageId: row[0],
+          fileName: row[1],
+          imageUrl: row[2],
+          uploadTime: row[3],
+        };
+      }
+    }
+
+    return {
+      success: false,
+      error: "Image not found",
+    };
+  } catch (error) {
+    console.error("Error getting image info by ID:", error);
+    addLogEntry("ERROR", "Error getting image info by ID", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+// 複数の画像IDから画像情報を取得
+export const getImagesInfoByIds = async (imageIds: string[]) => {
+  try {
+    const settings = await getUserSettings();
+    if (!settings?.google_sheet_id) {
+      throw new Error("Google Sheet not configured");
+    }
+
+    const accessToken = await getGoogleAccessToken();
+    const sheetId = settings.google_sheet_id;
+
+    // 画像アップロードリストを取得
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/画像アップロードリスト!A:D`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch image upload list");
+    }
+
+    const data = await response.json();
+    const rows = data.values || [];
+    const imageMap = new Map();
+
+    // ヘッダーをスキップして画像情報をマップに格納
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      imageMap.set(row[0], {
+        imageId: row[0],
+        fileName: row[1],
+        imageUrl: row[2],
+        uploadTime: row[3],
+      });
+    }
+
+    // 要求された画像IDの情報を取得
+    const results = imageIds.map(id => {
+      const info = imageMap.get(id);
+      return info || { imageId: id, error: "Image not found" };
+    });
+
+    return {
+      success: true,
+      images: results,
+    };
+  } catch (error) {
+    console.error("Error getting images info by IDs:", error);
+    addLogEntry("ERROR", "Error getting images info by IDs", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
 };

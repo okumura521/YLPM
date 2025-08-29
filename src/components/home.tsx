@@ -205,41 +205,56 @@ const Home = () => {
   };
 
   useEffect(() => {
-    fetchPosts();
+    let isMounted = true;
 
-    // Check initial authentication state
-    const checkInitialAuth = async () => {
-      try {
-        // Check for test user first
-        const testUser = localStorage.getItem("testUser");
-        if (testUser) {
-          setUser(JSON.parse(testUser));
-          return;
-        }
+    const initializeComponent = async () => {
+      if (!isMounted) return;
 
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          navigate("/login", { replace: true });
-        } else {
-          setUser(user);
-          // No longer auto-create sheets on login - redirect to dashboard instead
-          // Users will create sheets manually from the dashboard
+      await fetchPosts();
+
+      // Check initial authentication state
+      const checkInitialAuth = async () => {
+        try {
+          // Check for test user first
+          const testUser = localStorage.getItem("testUser");
+          if (testUser && isMounted) {
+            setUser(JSON.parse(testUser));
+            return;
+          }
+
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+
+          if (!isMounted) return;
+
+          if (!user) {
+            navigate("/login", { replace: true });
+          } else {
+            setUser(user);
+            // No longer auto-create sheets on login - redirect to dashboard instead
+            // Users will create sheets manually from the dashboard
+          }
+        } catch (error) {
+          if (isMounted) {
+            console.error("Authentication check failed:", error);
+            addLogEntry("ERROR", "Authentication check failed", error);
+            navigate("/login", { replace: true });
+          }
         }
-      } catch (error) {
-        console.error("Authentication check failed:", error);
-        addLogEntry("ERROR", "Authentication check failed", error);
-        navigate("/login", { replace: true });
-      }
+      };
+
+      await checkInitialAuth();
     };
 
-    checkInitialAuth();
+    initializeComponent();
 
     // Listen for auth state changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+
       if (event === "SIGNED_OUT") {
         // Clear test user session
         localStorage.removeItem("testUser");
@@ -254,7 +269,10 @@ const Home = () => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   // Periodic token check (every 5 minutes)
@@ -563,38 +581,168 @@ const Home = () => {
     }
   };
 
-  const handleEditClick = (postId: string) => {
-    const post = posts.find((p) => p.id === postId);
-    if (post) {
-      addLogEntry("INFO", "Opening post for editing", { postId, post });
+  const handleEditClick = async (postId: string) => {
+    // 投稿IDからベースIDを抽出
+    // 例: "1756238641981_x" -> "1756238641981"
+    const baseId = postId.includes("_") ? postId.split("_")[0] : postId;
 
-      // Convert the post data to match PostForm expectations
-      const postForEdit = {
-        ...post,
-        platforms: post.platforms || [],
-        channels: post.platforms || [],
-        scheduleTime: post.scheduleTime
-          ? new Date(post.scheduleTime)
-          : undefined,
-        isScheduled: !!post.scheduleTime,
-        // Add image data if available
-        images: [], // Will be populated from imageUrl if available
-        imageUrl: post.imageUrl || "",
-      };
+    addLogEntry("INFO", "Starting edit click handler", {
+      postId,
+      baseId,
+      allPosts: posts.map((p) => ({ id: p.id, platforms: p.platforms })),
+    });
 
-      // If there are image URLs, we should note them for the user
-      if (post.imageUrl) {
-        addLogEntry("INFO", "Post has associated images", {
-          postId,
-          imageUrl: post.imageUrl,
-        });
-        // Set image load error message for edit mode
-        postForEdit.imageLoadError =
-          "選択された画像が取得できません。再度設定してください。";
+    try {
+      // Google Sheetから直接プラットフォーム別のデータを取得
+      const settings = await getUserSettings();
+      if (!settings?.google_sheet_id) {
+        throw new Error("Google Sheet not configured");
       }
 
-      setCurrentPost(postForEdit);
+      const accessToken = await getGoogleAccessToken();
+      const sheetName = encodeURIComponent("投稿データ");
+
+      const response = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}?majorDimension=ROWS`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch sheet data");
+      }
+
+      const data = await response.json();
+      const rows = data.values || [];
+
+      // ベースIDに一致するすべての行を取得
+      const matchingRows = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const fullId = row[0] || "";
+        const isDeleted = row[8] === "TRUE";
+
+        if (isDeleted) continue;
+
+        const currentBaseId = fullId.includes("_")
+          ? fullId.split("_")[0]
+          : fullId;
+        if (currentBaseId === baseId) {
+          matchingRows.push({
+            id: fullId,
+            content: row[1] || "",
+            platform: row[2] || "",
+            scheduleTime: row[3] || "",
+            status: row[4] || "pending",
+            imageUrl: row[5] || "",
+          });
+        }
+      }
+
+      if (matchingRows.length === 0) {
+        addLogEntry("WARN", "No posts found for editing", {
+          baseId,
+          postId,
+        });
+        toast({
+          title: "エラー",
+          description: "編集する投稿が見つかりませんでした。",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // プラットフォーム別のデータ構造を作成
+      const platformData: Record<string, any> = {};
+      const allPlatforms = [
+        "x",
+        "instagram",
+        "facebook",
+        "line",
+        "discord",
+        "wordpress",
+      ];
+      const allImageUrls: string[] = [];
+
+      // 各プラットフォームのデータを初期化
+      allPlatforms.forEach((platform) => {
+        platformData[platform] = {
+          content: "",
+          hasImageUrl: false,
+          imageUrls: [],
+          imageUrlLength: 0,
+        };
+      });
+
+      // マッチした行からプラットフォーム別データを構築
+      matchingRows.forEach((row) => {
+        if (row.platform && platformData[row.platform]) {
+          platformData[row.platform] = {
+            content: row.content,
+            hasImageUrl: !!row.imageUrl,
+            imageUrls: row.imageUrl
+              ? row.imageUrl.split(",").filter((url) => url.trim())
+              : [],
+            imageUrlLength: row.imageUrl ? row.imageUrl.length : 0,
+          };
+
+          // 全体の画像URLリストに追加
+          if (row.imageUrl) {
+            const urls = row.imageUrl.split(",").filter((url) => url.trim());
+            allImageUrls.push(...urls);
+          }
+        }
+      });
+
+      // 重複を除去
+      const uniqueImageUrls = [...new Set(allImageUrls)];
+
+      const editData = {
+        id: baseId,
+        platforms: platformData,
+        scheduleTime: matchingRows[0]?.scheduleTime || "",
+        status: matchingRows[0]?.status || "pending",
+        imageUrls: uniqueImageUrls,
+        isScheduled: !!matchingRows[0]?.scheduleTime,
+      };
+
+      addLogEntry("INFO", "Setting platform-specific edit data for PostForm", {
+        baseId,
+        editDataCount: 1,
+        editData: [
+          {
+            id: baseId,
+            platforms: Object.keys(platformData).reduce(
+              (acc, platform) => {
+                acc[platform] = {
+                  content:
+                    platformData[platform].content.substring(0, 50) + "...",
+                  hasImageUrl: platformData[platform].hasImageUrl,
+                  imageUrls: platformData[platform].imageUrls,
+                  imageUrlLength: platformData[platform].imageUrlLength,
+                };
+                return acc;
+              },
+              {} as Record<string, any>,
+            ),
+          },
+        ],
+        totalImageUrls: uniqueImageUrls.length,
+      });
+
+      setCurrentPost([editData]);
       setIsEditDialogOpen(true);
+    } catch (error) {
+      console.error("Error fetching platform-specific data:", error);
+      addLogEntry("ERROR", "Error fetching platform-specific data", error);
+      toast({
+        title: "エラー",
+        description: "投稿データの取得に失敗しました。",
+        variant: "destructive",
+      });
     }
   };
 
@@ -807,7 +955,7 @@ const Home = () => {
           </DialogHeader>
           {currentPost && (
             <PostForm
-              initialData={currentPost}
+              post={Array.isArray(currentPost) ? currentPost : [currentPost]}
               isEditing={true}
               onSubmit={handleEditPost}
               onCancel={() => {

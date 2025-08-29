@@ -39,16 +39,19 @@ import {
   addPostToGoogleSheet,
   addLogEntry,
   getUserSettings,
+  uploadImageAndGenerateId,
+  getImagesInfoByIds,
 } from "@/lib/supabase";
 import { callAI, buildPrompt } from "@/lib/aiProviders";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 
 interface PostFormProps {
-  initialData?: PostData;
+  initialData?: PostData | PostData[];
   onSubmit?: (data: PostData) => void;
   onCancel?: () => void;
-  post?: any;
+  // 変更: postを単一のオブジェクトではなく、配列として受け取る
+  post?: PostData[];
   isEditing?: boolean;
 }
 
@@ -67,9 +70,10 @@ interface PostData {
     string,
     { date: string; time: string; enabled: boolean }
   >;
-  imagesCommaSeparated?: string;
-  imagesJsonArray?: string;
   status?: "pending" | "sent" | "failed" | "draft";
+  // 新しい画像管理システム
+  imageIds?: string[]; // 画像IDの配列
+  platformImageIds?: Record<string, string[]>; // プラットフォーム別の画像ID
 }
 
 const PostForm: React.FC<PostFormProps> = ({
@@ -81,36 +85,12 @@ const PostForm: React.FC<PostFormProps> = ({
 }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  // Initialize from post prop or initialData or defaults
-  const initData = post ||
-    initialData || {
-      content: "",
-      platforms: [],
-      channels: [],
-      isScheduled: false,
-    };
-
-  // Initialize schedule date and time from initData
-  React.useEffect(() => {
-    if (initData.scheduleTime) {
-      const scheduleDate = new Date(initData.scheduleTime);
-      // Convert to JST for display
-      const jstDate = new Date(scheduleDate.getTime() + 9 * 60 * 60 * 1000);
-      setScheduleDate(jstDate.toISOString().split("T")[0]);
-      setScheduleTime(jstDate.toTimeString().slice(0, 5));
-      setIsScheduled(true);
-    }
-  }, [initData.scheduleTime]);
 
   const [activeTab, setActiveTab] = useState<string>("ai");
-  const [content, setContent] = useState<string>(initData.content || "");
+  const [content, setContent] = useState<string>("");
   const [aiPrompt, setAiPrompt] = useState<string>("");
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(
-    initData.platforms || initData.channels || [],
-  );
-  const [isScheduled, setIsScheduled] = useState<boolean>(
-    initData.isScheduled || false,
-  );
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+  const [isScheduled, setIsScheduled] = useState<boolean>(false);
   const [scheduleDate, setScheduleDate] = useState<string>("");
   const [scheduleTime, setScheduleTime] = useState<string>("");
   const [isGeneratingDraft, setIsGeneratingDraft] = useState<boolean>(false);
@@ -118,6 +98,8 @@ const PostForm: React.FC<PostFormProps> = ({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [imageIds, setImageIds] = useState<string[]>([]); // 画像IDの配列
+  const [imageInfoMap, setImageInfoMap] = useState<Record<string, { imageId: string; fileName: string; imageUrl: string }>>({});
   const [platformContent, setPlatformContent] = useState<
     Record<string, string>
   >({});
@@ -137,43 +119,15 @@ const PostForm: React.FC<PostFormProps> = ({
   const [aiConfigured, setAiConfigured] = useState<boolean>(false);
   const [loadingAiSettings, setLoadingAiSettings] = useState<boolean>(true);
   const [imageLoadError, setImageLoadError] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<PostData>({
-    defaultValues: initialData,
+    defaultValues: undefined,
   });
-
-  // Load AI settings on component mount
-  React.useEffect(() => {
-    const loadAiSettings = async () => {
-      try {
-        setLoadingAiSettings(true);
-        const settings = await getUserSettings();
-        setAiSettings(settings);
-
-        // Check if AI is properly configured
-        const isConfigured = !!(
-          settings?.ai_service &&
-          settings?.ai_model &&
-          settings?.ai_api_token &&
-          settings?.ai_connection_status
-        );
-        setAiConfigured(isConfigured);
-
-        addLogEntry("INFO", "AI settings loaded", { isConfigured, settings });
-      } catch (error) {
-        addLogEntry("ERROR", "Failed to load AI settings", error);
-        setAiConfigured(false);
-      } finally {
-        setLoadingAiSettings(false);
-      }
-    };
-
-    loadAiSettings();
-  }, []);
 
   // Platform-specific validation rules
   const platformValidations = {
@@ -185,17 +139,21 @@ const PostForm: React.FC<PostFormProps> = ({
     wordpress: { maxLength: 100000, name: "WordPress" },
   };
 
-  const validateContent = (textToValidate?: string) => {
+  // プラットフォーム別の文字数監視と検証
+  const validatePlatformContents = () => {
     const errors: Record<string, string[]> = {};
-    const contentToCheck = textToValidate || content;
 
     selectedPlatforms.forEach((platform) => {
-      const validation =
-        platformValidations[platform as keyof typeof platformValidations];
-      if (validation && contentToCheck.length > validation.maxLength) {
+      const validation = platformValidations[platform as keyof typeof platformValidations];
+      if (!validation) return;
+
+      const platformContentValue = platformContent[platform] || "";
+      const contentLength = platformContentValue.length;
+
+      if (contentLength > validation.maxLength) {
         if (!errors[platform]) errors[platform] = [];
         errors[platform].push(
-          `TargetPlatforms「${validation.name}」の文字数を超えています。`,
+          `${validation.name}の文字数制限（${validation.maxLength}文字）を超えています。現在${contentLength}文字です。`
         );
       }
     });
@@ -204,11 +162,309 @@ const PostForm: React.FC<PostFormProps> = ({
     return Object.keys(errors).length === 0;
   };
 
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // プラットフォーム別コンテンツが変更されたときに検証を実行
+  React.useEffect(() => {
+    if (selectedPlatforms.length > 0) {
+      validatePlatformContents();
+    }
+  }, [platformContent, selectedPlatforms]);
+
+  // エラー状態の確認
+  const hasValidationErrors = Object.keys(validationErrors).length > 0;
+
+  React.useEffect(() => {
+    const initializeForm = async () => {
+      // 編集モードで、post配列またはinitialDataが渡された場合の処理
+      const editData = isEditing
+        ? post ||
+          (Array.isArray(initialData)
+            ? initialData
+            : initialData
+              ? [initialData]
+              : [])
+        : [];
+
+      if (isEditing && editData && editData.length > 0) {
+      const primaryPost = editData[0];
+
+      addLogEntry("INFO", "Post data received for editing", {
+        editDataCount: editData.length,
+        primaryPost: {
+          id: primaryPost.id,
+          hasPlatforms: !!primaryPost.platforms,
+          platformsType: typeof primaryPost.platforms,
+          imageIdsCount: primaryPost.imageIds?.length || 0,
+        },
+      });
+
+      // プラットフォーム別データが存在する場合の処理
+      if (
+        primaryPost.platforms &&
+        typeof primaryPost.platforms === "object" &&
+        !Array.isArray(primaryPost.platforms)
+      ) {
+        // 新しい形式: プラットフォーム別データ
+        const platformsData = primaryPost.platforms as Record<string, any>;
+        const availablePlatforms = Object.keys(platformsData).filter(
+          (platform) =>
+            platformsData[platform].content ||
+            platformsData[platform].hasImageUrl,
+        );
+
+        setSelectedPlatforms(availablePlatforms);
+        setIsScheduled(primaryPost.isScheduled || false);
+
+        // プラットフォーム別の投稿内容を設定
+        const newPlatformContent: Record<string, string> = {};
+        const newPlatformImages: Record<string, File[]> = {};
+        const newPlatformSchedules: Record<
+          string,
+          { date: string; time: string; enabled: boolean }
+        > = {};
+
+        availablePlatforms.forEach((platform) => {
+          const platformData = platformsData[platform];
+          newPlatformContent[platform] = platformData.content || "";
+
+          // プラットフォーム別の画像設定（後で実装）
+          newPlatformImages[platform] = [];
+
+          // スケジュール設定
+          if (primaryPost.scheduleTime) {
+            const scheduleDate = new Date(primaryPost.scheduleTime);
+            newPlatformSchedules[platform] = {
+              date: scheduleDate.toISOString().split("T")[0],
+              time: scheduleDate.toTimeString().slice(0, 5),
+              enabled: true,
+            };
+          } else {
+            newPlatformSchedules[platform] = {
+              date: "",
+              time: "",
+              enabled: false,
+            };
+          }
+        });
+
+        setPlatformContent(newPlatformContent);
+        setPlatformImages(newPlatformImages);
+        setPlatformSchedules(newPlatformSchedules);
+
+        // 最初のプラットフォームの内容をベース内容として設定
+        const firstPlatform = availablePlatforms[0];
+        if (firstPlatform && platformsData[firstPlatform]) {
+          setContent(platformsData[firstPlatform].content || "");
+        }
+
+                 // 画像IDの処理 - プラットフォーム別のimageUrlsから取得
+         const allImageIds: string[] = [];
+         const platformImageIds: Record<string, string[]> = {};
+         
+         // 各プラットフォームのimageUrlsから画像IDを収集
+         availablePlatforms.forEach(platform => {
+           const platformData = platformsData[platform];
+           if (platformData.imageUrls && Array.isArray(platformData.imageUrls)) {
+             platformImageIds[platform] = platformData.imageUrls;
+             allImageIds.push(...platformData.imageUrls);
+           }
+         });
+         
+         // 重複を除去
+         const uniqueImageIds = [...new Set(allImageIds)];
+         setImageIds(uniqueImageIds);
+         
+         addLogEntry("INFO", "Processing image IDs for edit", {
+           uniqueImageIds,
+           platformImageIds,
+           availablePlatforms
+         });
+         
+         // 画像IDから画像情報を取得
+         if (uniqueImageIds.length > 0) {
+           const imageInfoResult = await getImagesInfoByIds(uniqueImageIds);
+           if (imageInfoResult.success) {
+             const newImageInfoMap: Record<string, { imageId: string; fileName: string; imageUrl: string }> = {};
+             const newImagePreviews: string[] = [];
+             
+             imageInfoResult.images.forEach((imageInfo: any) => {
+               if (imageInfo.imageUrl && !imageInfo.error) {
+                 newImageInfoMap[imageInfo.imageId] = {
+                   imageId: imageInfo.imageId,
+                   fileName: imageInfo.fileName,
+                   imageUrl: imageInfo.imageUrl,
+                 };
+                 newImagePreviews.push(imageInfo.imageUrl);
+               }
+             });
+             
+             setImageInfoMap(newImageInfoMap);
+             setImagePreviews(newImagePreviews);
+             
+             addLogEntry("INFO", "Image info loaded for edit", {
+               imageCount: newImagePreviews.length,
+               imageIds: Object.keys(newImageInfoMap)
+             });
+           }
+         }
+
+                 addLogEntry("INFO", "Platform-specific data processed for edit", {
+           availablePlatforms,
+           platformContentKeys: Object.keys(newPlatformContent),
+           totalImageIds: uniqueImageIds.length,
+         });
+      } else {
+        // 従来の形式: 配列形式のプラットフォーム
+        setContent(primaryPost.content || "");
+        setIsScheduled(primaryPost.isScheduled || false);
+
+        // 各プラットフォームの投稿内容とスケジュールを初期化
+        const newPlatformContent: Record<string, string> = {};
+        const newSelectedPlatforms: string[] = [];
+        const newPlatformSchedules: Record<
+          string,
+          { date: string; time: string; enabled: boolean }
+        > = {};
+        const newImageIds: string[] = [];
+
+        // 既存の画像IDを管理するための新しいステートを設定
+        const uniqueImageIds = [
+          ...new Set(
+            editData.flatMap((p) => {
+              if (p.imageIds) {
+                return p.imageIds.filter((id) => id.trim());
+              }
+              return [];
+            }),
+          ),
+        ];
+
+        setImageIds(uniqueImageIds);
+        
+        // 画像IDから画像情報を取得
+        if (uniqueImageIds.length > 0) {
+          const imageInfoResult = await getImagesInfoByIds(uniqueImageIds);
+          if (imageInfoResult.success) {
+            const newImageInfoMap: Record<string, { imageId: string; fileName: string; imageUrl: string }> = {};
+            const newImagePreviews: string[] = [];
+            
+            imageInfoResult.images.forEach((imageInfo: any) => {
+              if (imageInfo.imageUrl && !imageInfo.error) {
+                newImageInfoMap[imageInfo.imageId] = {
+                  imageId: imageInfo.imageId,
+                  fileName: imageInfo.fileName,
+                  imageUrl: imageInfo.imageUrl,
+                };
+                newImagePreviews.push(imageInfo.imageUrl);
+              }
+            });
+            
+            setImageInfoMap(newImageInfoMap);
+            setImagePreviews(newImagePreviews);
+          }
+        }
+
+        editData.forEach((p) => {
+          const platform = Array.isArray(p.platforms)
+            ? p.platforms[0]
+            : p.platforms;
+          if (platform) {
+            // プラットフォームごとの投稿内容を設定
+            newPlatformContent[platform] = p.content || "";
+            if (!newSelectedPlatforms.includes(platform)) {
+              newSelectedPlatforms.push(platform);
+            }
+
+            // プラットフォームごとのスケジュールを設定
+            if (p.scheduleTime) {
+              const scheduleDate = new Date(p.scheduleTime);
+              // Convert to JST for display
+              const jstDate = new Date(scheduleDate.getTime());
+              newPlatformSchedules[platform] = {
+                date: jstDate.toISOString().split("T")[0],
+                time: jstDate.toTimeString().slice(0, 5),
+                enabled: true,
+              };
+            }
+
+            // 画像IDを設定
+            if (p.imageIds) {
+              newImageIds.push(...p.imageIds.filter((id) => id.trim()));
+            }
+          }
+        });
+
+        setPlatformContent(newPlatformContent);
+        setSelectedPlatforms(newSelectedPlatforms);
+        setPlatformSchedules(newPlatformSchedules);
+      }
+    } else {
+      // 新規投稿時の初期化
+      addLogEntry("INFO", "Initializing form for new post");
+      setContent("");
+      setSelectedPlatforms([]);
+      setIsScheduled(false);
+      setPlatformContent({});
+      setScheduleDate("");
+      setScheduleTime("");
+      setImagePreviews([]);
+      setImageIds([]);
+      setImageInfoMap({});
+    }
+  };
+
+  initializeForm();
+}, [post, initialData, isEditing]);
+
+  // AI 設定の読み込みは、コンポーネントのマウント時に一度だけ実行する
+  React.useEffect(() => {
+    let isMounted = true;
+
+    const loadAiSettings = async () => {
+      try {
+        setLoadingAiSettings(true);
+        const settings = await getUserSettings();
+
+        if (!isMounted) return; // コンポーネントがアンマウントされている場合は処理を中断
+
+        setAiSettings(settings);
+
+        const isConfigured = !!(
+          settings?.ai_service &&
+          settings?.ai_model &&
+          settings?.ai_api_token &&
+          settings?.ai_connection_status
+        );
+        setAiConfigured(isConfigured);
+
+        addLogEntry("INFO", "AI settings loaded in PostForm", {
+          isConfigured,
+          componentId: "PostForm",
+        });
+      } catch (error) {
+        if (isMounted) {
+          addLogEntry("ERROR", "Failed to load AI settings in PostForm", error);
+          setAiConfigured(false);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingAiSettings(false);
+        }
+      }
+    };
+
+    loadAiSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []); // 依存配列が空なので、初回マウント時のみ実行される
+
+  const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     if (files.length > 0) {
       setSelectedImages((prev) => [...prev, ...files]);
 
+      // プレビュー用にファイルを読み込み（新規投稿時はローカルURLを使用）
       files.forEach((file) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -241,6 +497,37 @@ const PostForm: React.FC<PostFormProps> = ({
           [platform]: [...current, image],
         };
       }
+    });
+  };
+
+  const toggleExistingImageForPlatform = (imageIndex: number, platform: string) => {
+    setPlatformImages((prev) => {
+      const current = prev[platform] || [];
+      const existingImageUrl = imagePreviews[imageIndex];
+      
+      // 既存画像のURLから画像IDを取得
+      const imageId = Object.keys(imageInfoMap).find(id => 
+        imageInfoMap[id].imageUrl === existingImageUrl
+      );
+      
+      if (imageId) {
+        // 既に選択されている場合は削除
+        const exists = current.some((img) => img.name === imageInfoMap[imageId].fileName);
+        if (exists) {
+          return {
+            ...prev,
+            [platform]: current.filter((img) => img.name !== imageInfoMap[imageId].fileName),
+          };
+        } else {
+          // 選択されていない場合は追加（ダミーファイルオブジェクトを作成）
+          const dummyFile = new File([], imageInfoMap[imageId].fileName, { type: 'image/jpeg' });
+          return {
+            ...prev,
+            [platform]: [...current, dummyFile],
+          };
+        }
+      }
+      return prev;
     });
   };
 
@@ -372,62 +659,64 @@ const PostForm: React.FC<PostFormProps> = ({
   };
 
   const handleFormSubmit = async (isDraft = false) => {
-    if (!isDraft && !validateContent()) return;
+    setIsSubmitting(true);
+    
+    try {
+      // 下書き保存時は文字数検証をスキップ、確定・投稿時は検証を実行
+      if (!isDraft && !validatePlatformContents()) {
+        toast({
+          title: "文字数制限エラー",
+          description: "一部のプラットフォームで文字数制限を超えています。内容を修正してください。",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    // Generate images data
-    const imageNames = selectedImages.map((img) => img.name);
-    const imagesCommaSeparated = imageNames.join(",");
-    const imagesJsonArray = JSON.stringify(imageNames);
-
-    // Generate a single base ID for all platforms - fix the duplicate issue
-    let baseId: string;
-    if (isEditing && initData.id) {
-      // For editing, extract base ID if it has platform suffix
-      baseId = initData.id.includes("_")
-        ? initData.id.split("_")[0]
-        : initData.id;
-    } else {
-      // For new posts, generate new base ID
-      baseId = Date.now().toString();
+    // 新規アップロードされた画像を処理（選択された画像のみ）
+    const newImageIds: string[] = [];
+    const selectedImageFiles: File[] = [];
+    
+    // 各プラットフォームで選択された画像を収集（重複除去済み）
+    const platformImageSet = new Set<string>();
+    selectedPlatforms.forEach(platform => {
+      const platformSelectedImages = platformImages[platform] || [];
+      platformSelectedImages.forEach(image => {
+        if (!platformImageSet.has(image.name)) {
+          platformImageSet.add(image.name);
+          selectedImageFiles.push(image);
+        }
+      });
+    });
+    
+    // 選択された画像のみをアップロード
+    for (const image of selectedImageFiles) {
+      const uploadResult = await uploadImageAndGenerateId(image);
+      if (uploadResult.success) {
+        newImageIds.push(uploadResult.imageId);
+        addLogEntry("INFO", "Selected image uploaded", {
+          fileName: image.name,
+          imageId: uploadResult.imageId,
+          platform: selectedPlatforms.find(p => platformImages[p]?.some(img => img.name === image.name))
+        });
+      }
     }
+
+    // 既存の画像IDと新規画像IDを統合
+    const allImageIds = [...imageIds, ...newImageIds];
+
+    // Generate a single base ID for all platforms
+    const baseId = isEditing
+      ? post?.[0]?.id?.split("_")[0] || Date.now().toString()
+      : Date.now().toString();
 
     addLogEntry("INFO", "Starting form submission", {
       baseId,
       isEditing,
       selectedPlatforms,
-      originalId: initData.id,
+      originalId: isEditing ? post?.[0]?.id : undefined,
     });
 
-    // For editing, submit as a single post with all platforms
-    if (isEditing) {
-      let scheduledDateTime: Date | undefined;
-      if (isScheduled && scheduleDate && scheduleTime) {
-        const localDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-        scheduledDateTime = new Date(
-          localDateTime.getTime() - 9 * 60 * 60 * 1000,
-        ); // Convert JST to UTC
-      }
-
-      const postData: PostData = {
-        content: content,
-        platforms: selectedPlatforms,
-        channels: selectedPlatforms,
-        isScheduled: isScheduled,
-        scheduleTime: scheduledDateTime,
-        images: selectedImages,
-        platformContent,
-        platformImages,
-        platformSchedules,
-        status: isDraft ? "draft" : "pending",
-        id: baseId, // Use base ID for editing
-      };
-
-      addLogEntry("INFO", "Submitting edited post", { postData });
-      onSubmit(postData);
-      return;
-    }
-
-    // For new posts, submit for each platform individually
+    // 変更: 編集時も新規登録時と同様に、各プラットフォームごとにデータを保存
     for (const platform of selectedPlatforms) {
       let scheduledDateTime: Date | undefined;
       const platformSchedule = platformSchedules[platform];
@@ -437,7 +726,6 @@ const PostForm: React.FC<PostFormProps> = ({
         platformSchedule.date &&
         platformSchedule.time
       ) {
-        // Convert to Japan time (JST)
         const localDateTime = new Date(
           `${platformSchedule.date}T${platformSchedule.time}`,
         );
@@ -445,7 +733,6 @@ const PostForm: React.FC<PostFormProps> = ({
           localDateTime.getTime() - 9 * 60 * 60 * 1000,
         ); // Convert JST to UTC
       } else if (isScheduled && scheduleDate && scheduleTime) {
-        // Convert to Japan time (JST)
         const localDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
         scheduledDateTime = new Date(
           localDateTime.getTime() - 9 * 60 * 60 * 1000,
@@ -459,11 +746,12 @@ const PostForm: React.FC<PostFormProps> = ({
         isScheduled: platformSchedule?.enabled || isScheduled,
         scheduleTime: scheduledDateTime,
         images: platformImages[platform] || selectedImages,
-        platformContent,
+        platformContent, // 全プラットフォームの内容を送信
         platformImages,
         platformSchedules,
+        imageIds: allImageIds, // 画像IDの配列
         status: isDraft ? "draft" : "pending",
-        id: `${baseId}_${platform}`, // Use consistent ID format with platform suffix
+        id: `${baseId}_${platform}`, // IDにプラットフォームサフィックスを付与
       };
 
       addLogEntry("INFO", "Submitting post for platform", {
@@ -496,16 +784,29 @@ const PostForm: React.FC<PostFormProps> = ({
         ? "投稿が正常に更新されました"
         : "投稿が正常に作成されました",
     });
-  };
+  } catch (error) {
+    console.error("Form submission error:", error);
+    addLogEntry("ERROR", "Form submission failed", error);
+    toast({
+      title: "投稿エラー",
+      description: "投稿の処理中にエラーが発生しました",
+      variant: "destructive",
+    });
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
-  // Validate content on change for Manual Entry tab
-  React.useEffect(() => {
-    if (activeTab === "manual") {
-      validateContent();
+  // 🔹 JSX外（コンポーネント先頭）に関数定義
+  const convertDriveUrl = (url: string) => {
+    // 新規投稿時はローカルURLをそのまま使用
+    if (url.startsWith('data:')) {
+      return url;
     }
-  }, [content, selectedPlatforms, activeTab]);
-
-  const hasValidationErrors = Object.keys(validationErrors).length > 0;
+    // 編集時はGoogle Drive URLを変換
+    const match = url.match(/[-\w]{25,}/);
+    return match ? `https://lh3.googleusercontent.com/d/${match[0]}` : url;
+  };
 
   return (
     <div className="w-full bg-white">
@@ -573,453 +874,532 @@ const PostForm: React.FC<PostFormProps> = ({
         )}
 
         <div className="space-y-6">
-            <div className="space-y-6">
-              {/* 1. Target Platforms Selection */}
+          <div className="space-y-6">
+            {/* 1. Target Platforms Selection */}
+            <div className="space-y-4">
+              <Label className="text-base font-medium">
+                1. Target Platforms を選択
+              </Label>
+              {isEditing ? (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    編集モードでは、プラットフォームの変更はできません。
+                  </p>
+                  <div className="flex gap-2">
+                    {selectedPlatforms.map((platform) => {
+                      const platformInfo = {
+                        x: "X (Twitter)",
+                        instagram: "Instagram",
+                        facebook: "Facebook",
+                        line: "LINE",
+                        discord: "Discord",
+                        wordpress: "WordPress",
+                      };
+                      return (
+                        <Badge key={platform} variant="outline">
+                          {platformInfo[
+                            platform as keyof typeof platformInfo
+                          ] || platform}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <PlatformSelector
+                  selectedPlatforms={selectedPlatforms}
+                  onChange={setSelectedPlatforms}
+                />
+              )}
+            </div>
+
+            {/* 2. Content Draft */}
+            <div className="space-y-2">
+              <Label htmlFor="content">2. 投稿内容の下書き</Label>
+              <div className="text-sm text-muted-foreground mb-2">
+                投稿内容を入力してください。下記の「投稿内容転記ボタン」でプラットフォーム別投稿内容に転記・上書きできます。
+              </div>
+              <Textarea
+                id="content"
+                placeholder="投稿内容を入力してください..."
+                className="min-h-[120px]"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const newPlatformContent = { ...platformContent };
+                  selectedPlatforms.forEach((platform) => {
+                    newPlatformContent[platform] = content;
+                  });
+                  setPlatformContent(newPlatformContent);
+                  toast({
+                    title: "転記完了",
+                    description:
+                      "投稿内容をプラットフォーム別設定に転記しました",
+                  });
+                }}
+                disabled={!content.trim() || selectedPlatforms.length === 0}
+                className="w-full"
+              >
+                投稿内容転記ボタン（プラットフォーム別投稿内容に転記・上書き）
+              </Button>
+            </div>
+
+            {/* 3. AI Assistant Section */}
+            <Card className="p-4 border-2 border-dashed border-blue-200">
               <div className="space-y-4">
-                <Label className="text-base font-medium">
-                  1. Target Platforms を選択
-                </Label>
-                {isEditing ? (
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
-                    <p className="text-sm text-muted-foreground mb-2">
-                      編集モードでは、プラットフォームの変更はできません。
-                    </p>
-                    <div className="flex gap-2">
-                      {selectedPlatforms.map((platform) => {
-                        const platformInfo = {
-                          x: "X (Twitter)",
-                          instagram: "Instagram",
-                          facebook: "Facebook",
-                          line: "LINE",
-                          discord: "Discord",
-                          wordpress: "WordPress",
-                        };
-                        return (
-                          <Badge key={platform} variant="outline">
-                            {platformInfo[
-                              platform as keyof typeof platformInfo
-                            ] || platform}
-                          </Badge>
-                        );
-                      })}
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-medium">
+                    3. AIアシスタント（オプション）
+                  </Label>
+                  <div className="text-sm text-muted-foreground">
+                    {aiConfigured
+                      ? "AI生成する場合は、ベース投稿内容・キーワードとAI への指示を入力して、プラットフォーム別生成ボタンを押してください。"
+                      : "AI設定が未設定のため利用できません"}
+                  </div>
+                </div>
+
+                {aiConfigured ? (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-base-content">
+                        ベース投稿内容・キーワード
+                      </Label>
+                      <div className="text-sm text-muted-foreground mb-2">
+                        AIが生成する際の基となる内容やキーワードを入力してください。
+                      </div>
+                      <Textarea
+                        id="ai-base-content"
+                        placeholder="例：新商品の紹介、イベント告知、キーワードなど..."
+                        className="min-h-[100px]"
+                        value={aiPrompt}
+                        onChange={(e) => setAiPrompt(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-instruction">AI への指示</Label>
+                      <div className="text-sm text-muted-foreground mb-2">
+                        各プラットフォームに合わせてどのように最適化するか指示してください。
+                      </div>
+                      <Input
+                        id="ai-instruction"
+                        placeholder="例：カジュアルに、ビジネス向けに、絵文字を使って、詳しく説明して"
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Button
+                        type="button"
+                        onClick={generateAIDraft}
+                        disabled={
+                          isGeneratingDraft ||
+                          !aiPrompt ||
+                          !content ||
+                          selectedPlatforms.length === 0
+                        }
+                        className="w-full bg-blue-600 hover:bg-blue-700"
+                      >
+                        {isGeneratingDraft ? (
+                          <>
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{
+                                duration: 1,
+                                repeat: Infinity,
+                                ease: "linear",
+                              }}
+                              className="mr-2"
+                            >
+                              <Clock size={16} />
+                            </motion.div>
+                            AIコンテンツ生成中...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={16} className="mr-2" />
+                            プラットフォーム別生成ボタン
+                          </>
+                        )}
+                      </Button>
+                      <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
+                        ※ボタンを押下すると、プラットフォーム別設定の投稿内容が上書きされるので、下書き等書き込んでいる場合は、別場所に保存するなどしてください。
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <PlatformSelector
-                    selectedPlatforms={selectedPlatforms}
-                    onChange={setSelectedPlatforms}
-                  />
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                    <p className="text-sm text-muted-foreground text-center">
+                      AI設定を完了すると利用可能になります
+                    </p>
+                  </div>
                 )}
               </div>
+            </Card>
 
-              {/* 2. Content Draft */}
-              <div className="space-y-2">
-                <Label htmlFor="content">2. 投稿内容の下書き</Label>
-                <div className="text-sm text-muted-foreground mb-2">
-                  投稿内容を入力してください。下記の「投稿内容転記ボタン」でプラットフォーム別投稿内容に転記・上書きできます。
-                </div>
-                <Textarea
-                  id="content"
-                  placeholder="投稿内容を入力してください..."
-                  className="min-h-[120px]"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                />
+            {/* 4. Select Images */}
+            <div className="space-y-2">
+              <Label htmlFor="manual-image-select">
+                4. 投稿したい画像を選択
+              </Label>
+              <div className="text-sm text-muted-foreground mb-2">
+                投稿に使用する画像を選択してください。
+                <br />
+                ※プラットフォーム毎に投稿する画像は下部のプラットフォーム別設定で選択してください。
+              </div>
+              <div className="flex items-center gap-4">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    const newPlatformContent = { ...platformContent };
-                    selectedPlatforms.forEach(platform => {
-                      newPlatformContent[platform] = content;
-                    });
-                    setPlatformContent(newPlatformContent);
-                    toast({
-                      title: "転記完了",
-                      description: "投稿内容をプラットフォーム別設定に転記しました",
-                    });
-                  }}
-                  disabled={!content.trim() || selectedPlatforms.length === 0}
-                  className="w-full"
+                  onClick={() =>
+                    document.getElementById("image-input")?.click()
+                  }
                 >
-                  投稿内容転記ボタン（プラットフォーム別投稿内容に転記・上書き）
+                  <Image className="mr-2 h-4 w-4" />+ 画像追加
                 </Button>
-              </div>
-
-              {/* 3. AI Assistant Section */}
-              <Card className="p-4 border-2 border-dashed border-blue-200">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-base font-medium">3. AIアシスタント（オプション）</Label>
-                    <div className="text-sm text-muted-foreground">
-                      {aiConfigured ? "AI生成する場合は、ベース投稿内容・キーワードとAI への指示を入力して、プラットフォーム別生成ボタンを押してください。" : "AI設定が未設定のため利用できません"}
-                    </div>
-                  </div>
-                  
-                  {aiConfigured ? (
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="ai-base-content">ベース投稿内容・キーワード</Label>
-                        <div className="text-sm text-muted-foreground mb-2">
-                          AIが生成する際の基となる内容やキーワードを入力してください。
-                        </div>
-                        <Textarea
-                          id="ai-base-content"
-                          placeholder="例：新商品の紹介、イベント告知、キーワードなど..."
-                          className="min-h-[100px]"
-                          value={aiPrompt}
-                          onChange={(e) => setAiPrompt(e.target.value)}
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="ai-instruction">AI への指示</Label>
-                        <div className="text-sm text-muted-foreground mb-2">
-                          各プラットフォームに合わせてどのように最適化するか指示してください。
-                        </div>
-                        <Input
-                          id="ai-instruction"
-                          placeholder="例：カジュアルに、ビジネス向けに、絵文字を使って、詳しく説明して"
-                          value={content}
-                          onChange={(e) => setContent(e.target.value)}
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Button
-                          type="button"
-                          onClick={generateAIDraft}
-                          disabled={
-                            isGeneratingDraft ||
-                            !aiPrompt ||
-                            !content ||
-                            selectedPlatforms.length === 0
-                          }
-                          className="w-full bg-blue-600 hover:bg-blue-700"
-                        >
-                          {isGeneratingDraft ? (
-                            <>
-                              <motion.div
-                                animate={{ rotate: 360 }}
-                                transition={{
-                                  duration: 1,
-                                  repeat: Infinity,
-                                  ease: "linear",
-                                }}
-                                className="mr-2"
-                              >
-                                <Clock size={16} />
-                              </motion.div>
-                              AIコンテンツ生成中...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles size={16} className="mr-2" />
-                              プラットフォーム別生成ボタン
-                            </>
-                          )}
-                        </Button>
-                        <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
-                          ※ボタンを押下すると、プラットフォーム別設定の投稿内容が上書きされるので、下書き等書き込んでいる場合は、別場所に保存するなどしてください。
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
-                      <p className="text-sm text-muted-foreground text-center">
-                        AI設定を完了すると利用可能になります
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </Card>
-
-              {/* 4. Select Images */}
-              <div className="space-y-2">
-                <Label htmlFor="manual-image-select">4. 投稿したい画像を選択</Label>
-                <div className="text-sm text-muted-foreground mb-2">
-                  投稿に使用する画像を選択してください。<br />
-                  ※プラットフォーム毎に投稿する画像は下部のプラットフォーム別設定で選択してください。
-                </div>
-                <div className="flex items-center gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      document.getElementById("image-input")?.click()
-                    }
-                  >
-                    <Image className="mr-2 h-4 w-4" />+ 画像追加
-                  </Button>
-                  <input
-                    id="image-input"
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleImageSelect}
-                    className="hidden"
-                  />
-                  {selectedImages.length > 0 && (
-                    <span className="text-sm text-muted-foreground">
-                      {selectedImages.length}枚選択済み
-                    </span>
-                  )}
-                </div>
+                <input
+                  id="image-input"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
                 {imagePreviews.length > 0 && (
-                  <div className="mt-2 grid grid-cols-4 gap-2">
-                    {imagePreviews.map((preview, index) => (
-                      <div key={index} className="relative">
-                        <img
-                          src={preview}
-                          alt={`Preview ${index + 1}`}
-                          className="w-full h-20 object-cover rounded-md"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute top-1 right-1 h-6 w-6 p-0"
-                          onClick={() => removeImage(index)}
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    ))}
+                  <div className="text-sm text-muted-foreground">
+                    {imagePreviews.length}枚選択済み
                   </div>
                 )}
               </div>
-
-              {/* 5. Platform-specific Content and Settings */}
-              {selectedPlatforms.length > 0 && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-base font-medium">
-                      5. プラットフォーム別設定
-                    </Label>
-                    <div className="text-sm text-muted-foreground">
-                      投稿内容の下書きを清書してください。プラットフォーム毎に送信タイミングを分けたい場合は、個別スケジュール設定をONにして設定してください。<br />
-                      ※個別スケジュールを設定しない場合は、スケジュール投稿の設定になります。
+              {imagePreviews.length > 0 && (
+                <div className="mt-2 grid grid-cols-4 gap-2">
+                  {imagePreviews.map((preview, index) => (
+                    <div key={index} className="relative">
+                      <img
+                        src={convertDriveUrl(preview)}
+                        alt={`Preview ${index + 1}`}
+                        className="w-full h-20 object-cover rounded-md"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-1 right-1 h-6 w-6 p-0"
+                        onClick={() => removeImage(index)}
+                      >
+                        ×
+                      </Button>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 5. Platform-specific Content and Settings */}
+            {selectedPlatforms.length > 0 && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-base font-medium">
+                    5. プラットフォーム別設定
+                  </Label>
+                  <div className="text-sm text-muted-foreground">
+                    投稿内容の下書きを清書してください。プラットフォーム毎に送信タイミングを分けたい場合は、個別スケジュール設定をONにして設定してください。
+                    <br />
+                    ※個別スケジュールを設定しない場合は、スケジュール投稿の設定になります。
                   </div>
-                  {selectedPlatforms.map((platform) => {
-                    const validation =
-                      platformValidations[
-                        platform as keyof typeof platformValidations
-                      ];
-                    const platformContentValue =
-                      platformContent[platform] || "";
-                    const platformSchedule = platformSchedules[platform] || {
-                      date: "",
-                      time: "",
-                      enabled: false,
-                    };
+                </div>
+                {selectedPlatforms.map((platform) => {
+                  const validation = platformValidations[platform as keyof typeof platformValidations];
+                  const platformContentValue = platformContent[platform] || "";
+                  const platformSchedule = platformSchedules[platform] || {
+                    date: "",
+                    time: "",
+                    enabled: false,
+                  };
+                  const hasError = validationErrors[platform] && validationErrors[platform].length > 0;
 
-                    return (
-                      <Card key={platform} className="p-4">
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-center">
-                            <Badge variant="outline">
-                              {validation?.name || platform}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {platformContentValue.length}/
-                              {validation?.maxLength || "∞"} 文字
-                            </span>
-                          </div>
+                  return (
+                    <Card key={platform} className={`p-4 ${hasError ? 'border-red-300 bg-red-50' : ''}`}>
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <Badge variant={hasError ? "destructive" : "outline"}>
+                            {validation?.name || platform}
+                          </Badge>
+                          <span className={`text-xs ${hasError ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                            {platformContentValue.length}/
+                            {validation?.maxLength || "∞"} 文字
+                            {hasError && (
+                              <span className="ml-2 text-red-600">
+                                (制限超過)
+                              </span>
+                            )}
+                          </span>
+                        </div>
 
-                          {/* Platform-specific content */}
+                        {/* Platform-specific content */}
+                        <div className="space-y-2">
+                          <Label>投稿内容</Label>
+                          <Textarea
+                            placeholder={`${validation?.name || platform}用の投稿内容`}
+                            value={platformContentValue}
+                            onChange={(e) =>
+                              updatePlatformContent(platform, e.target.value)
+                            }
+                            className={`min-h-[100px] ${hasError ? 'border-red-300 focus:border-red-500' : ''}`}
+                          />
+                          {hasError && (
+                            <div className="text-sm text-red-600">
+                              {validationErrors[platform].map((error, index) => (
+                                <div key={index} className="flex items-center gap-1">
+                                  <AlertTriangle size={14} />
+                                  {error}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Image selection for platform */}
+                        {imagePreviews.length > 0 && (
                           <div className="space-y-2">
-                            <Label>投稿内容</Label>
-                            <Textarea
-                              placeholder={`${validation?.name || platform}用の投稿内容`}
-                              value={platformContentValue}
-                              onChange={(e) =>
-                                updatePlatformContent(platform, e.target.value)
-                              }
-                              className="min-h-[100px]"
-                            />
-                          </div>
+                            <Label>使用する画像</Label>
+                            <div className="grid grid-cols-4 gap-2">
+                                                             {imagePreviews.map((preview, index) => {
+                                                                   // 新規アップロード画像の場合
+                                  const isNewImage = index < selectedImages.length;
+                                  const isSelected = isNewImage
+                                    ? platformImages[platform]?.some(
+                                        (img) =>
+                                          img.name === selectedImages[index]?.name,
+                                      ) || false
+                                    : platformImages[platform]?.some(
+                                        (img) => {
+                                          const existingImageUrl = imagePreviews[index];
+                                          const imageId = Object.keys(imageInfoMap).find(id => 
+                                            imageInfoMap[id].imageUrl === existingImageUrl
+                                          );
+                                          return imageId && img.name === imageInfoMap[imageId].fileName;
+                                        }
+                                      ) || false;
 
-                          {/* Image selection for platform */}
-                          {selectedImages.length > 0 && (
-                            <div className="space-y-2">
-                              <Label>使用する画像</Label>
-                              <div className="grid grid-cols-4 gap-2">
-                                {selectedImages.map((image, index) => {
-                                  const isSelected =
-                                    platformImages[platform]?.some(
-                                      (img) => img.name === image.name,
-                                    ) || false;
-                                  return (
+                                                                   return (
                                     <div key={index} className="relative">
                                       <img
-                                        src={imagePreviews[index]}
+                                        src={convertDriveUrl(preview)}
                                         alt={`Image ${index + 1}`}
                                         className={`w-full h-16 object-cover rounded-md cursor-pointer border-2 ${
                                           isSelected
                                             ? "border-primary"
                                             : "border-gray-200"
                                         }`}
-                                        onClick={() =>
-                                          toggleImageForPlatform(
-                                            index,
-                                            platform,
-                                          )
-                                        }
+                                        onClick={() => {
+                                          if (isNewImage) {
+                                            toggleImageForPlatform(
+                                              index,
+                                              platform,
+                                            );
+                                          } else {
+                                            // 既存画像の選択解除
+                                            toggleExistingImageForPlatform(
+                                              index,
+                                              platform,
+                                            );
+                                          }
+                                        }}
                                       />
                                       {isSelected && (
                                         <div className="absolute top-1 right-1 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
                                           ✓
                                         </div>
                                       )}
+                                      {!isNewImage && (
+                                        <div className="absolute bottom-1 left-1 bg-blue-500 text-white rounded px-1 text-xs">
+                                          既存
+                                        </div>
+                                      )}
+                                      {isNewImage && !isSelected && (
+                                        <div className="absolute bottom-1 right-1 bg-gray-500 text-white rounded px-1 text-xs">
+                                          未選択
+                                        </div>
+                                      )}
                                     </div>
                                   );
-                                })}
+                               })}
+                            </div>
+                                                         <div className="text-xs text-muted-foreground">
+                               ※既存画像は自動的に選択されています。新規アップロード画像はクリックして選択してください。チェックが付いていない画像は保存されません。
+                             </div>
+                          </div>
+                        )}
+
+                        {/* Platform-specific schedule */}
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              checked={platformSchedule.enabled}
+                              onCheckedChange={(checked) =>
+                                updatePlatformSchedule(
+                                  platform,
+                                  "enabled",
+                                  checked,
+                                )
+                              }
+                            />
+                            <Label>個別スケジュール設定</Label>
+                          </div>
+
+                          {platformSchedule.enabled && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label>日付</Label>
+                                <Input
+                                  type="date"
+                                  value={platformSchedule.date}
+                                  onChange={(e) =>
+                                    updatePlatformSchedule(
+                                      platform,
+                                      "date",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <Label>時刻</Label>
+                                <Input
+                                  type="time"
+                                  value={platformSchedule.time}
+                                  onChange={(e) =>
+                                    updatePlatformSchedule(
+                                      platform,
+                                      "time",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
                               </div>
                             </div>
                           )}
-
-                          {/* Platform-specific schedule */}
-                          <div className="space-y-2">
-                            <div className="flex items-center space-x-2">
-                              <Switch
-                                checked={platformSchedule.enabled}
-                                onCheckedChange={(checked) =>
-                                  updatePlatformSchedule(
-                                    platform,
-                                    "enabled",
-                                    checked,
-                                  )
-                                }
-                              />
-                              <Label>個別スケジュール設定</Label>
-                            </div>
-
-                            {platformSchedule.enabled && (
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <Label>日付</Label>
-                                  <Input
-                                    type="date"
-                                    value={platformSchedule.date}
-                                    onChange={(e) =>
-                                      updatePlatformSchedule(
-                                        platform,
-                                        "date",
-                                        e.target.value,
-                                      )
-                                    }
-                                  />
-                                </div>
-                                <div>
-                                  <Label>時刻</Label>
-                                  <Input
-                                    type="time"
-                                    value={platformSchedule.time}
-                                    onChange={(e) =>
-                                      updatePlatformSchedule(
-                                        platform,
-                                        "time",
-                                        e.target.value,
-                                      )
-                                    }
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
                         </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-
-                )}
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
             )}
-
-            {/* Validation Alerts */}
-            {hasValidationErrors && (
-              <div className="space-y-2">
-                {Object.entries(validationErrors).map(
-                  ([platform, errors]) => (
-                    <Alert key={platform} variant="destructive">
-                      <AlertTriangle className="h-4 w-4" />
-                      <AlertDescription>{errors.join(", ")}</AlertDescription>
-                    </Alert>
-                  ),
-                )}
-              </div>
-            )}
-        </div>
-
-        {/* Schedule Settings */}
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="schedule"
-              checked={isScheduled}
-              onCheckedChange={setIsScheduled}
-            />
-            <Label htmlFor="schedule">スケジュール投稿</Label>
           </div>
-
-          {isScheduled && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="date">日付</Label>
-                <div className="flex">
-                  <Calendar className="mr-2 h-4 w-4 opacity-50" />
-                  <Input
-                    id="date"
-                    type="date"
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="time">時刻</Label>
-                <div className="flex">
-                  <Clock className="mr-2 h-4 w-4 opacity-50" />
-                  <Input
-                    id="time"
-                    type="time"
-                    value={scheduleTime}
-                    onChange={(e) => setScheduleTime(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex justify-between pt-6">
-          <Button variant="outline" type="button" onClick={onCancel}>
+        {/* Validation Alerts */}
+        {hasValidationErrors && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <h4 className="font-semibold mb-1">文字数制限エラー</h4>
+              <p className="text-sm mb-2">
+                以下のプラットフォームで文字数制限を超えています。内容を修正してから投稿してください。
+              </p>
+              {Object.entries(validationErrors).map(([platform, errors]) => {
+                const platformInfo = {
+                  x: "X (Twitter)",
+                  instagram: "Instagram",
+                  facebook: "Facebook",
+                  line: "LINE",
+                  discord: "Discord",
+                  wordpress: "WordPress",
+                };
+                const platformName = platformInfo[platform as keyof typeof platformInfo] || platform;
+                
+                return (
+                  <div key={platform} className="mb-2 p-2 bg-red-100 rounded border border-red-200">
+                    <span className="font-medium text-red-800">{platformName}</span>
+                    <ul className="list-disc list-inside ml-2 mt-1">
+                      {errors.map((error, index) => (
+                        <li key={index} className="text-sm text-red-700">
+                          {error}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <Separator />
+
+        {/* Form Action Buttons */}
+        <div className="flex justify-end space-x-2 p-4">
+          <Button type="button" variant="outline" onClick={onCancel}>
             キャンセル
           </Button>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => handleFormSubmit(true)}
-              disabled={selectedPlatforms.length === 0 || !content.trim()}
-            >
-              下書き保存
-            </Button>
-            <Button
-              onClick={() => handleFormSubmit(false)}
-              disabled={
-                hasValidationErrors ||
-                selectedPlatforms.length === 0 ||
-                !content.trim()
-              }
-            >
-              <Send className="mr-2 h-4 w-4" />
-              {isScheduled ? "スケジュール投稿" : "今すぐ投稿"}
-            </Button>
-          </div>
+                     <Button
+             type="button"
+             onClick={() => handleFormSubmit(true)}
+             variant="secondary"
+             disabled={
+               selectedPlatforms.length === 0 ||
+               isGeneratingDraft ||
+               isSubmitting
+             }
+           >
+             {isSubmitting ? (
+               <>
+                 <motion.div
+                   animate={{ rotate: 360 }}
+                   transition={{
+                     duration: 1,
+                     repeat: Infinity,
+                     ease: "linear",
+                   }}
+                   className="mr-2"
+                 >
+                   <Clock size={16} />
+                 </motion.div>
+                 処理中...
+               </>
+             ) : (
+               "下書き保存"
+             )}
+           </Button>
+           <Button
+             type="button"
+             onClick={() => handleFormSubmit(false)}
+             disabled={
+               selectedPlatforms.length === 0 ||
+               isGeneratingDraft ||
+               hasValidationErrors ||
+               isSubmitting
+             }
+           >
+             {isSubmitting ? (
+               <>
+                 <motion.div
+                   animate={{ rotate: 360 }}
+                   transition={{
+                     duration: 1,
+                     repeat: Infinity,
+                     ease: "linear",
+                   }}
+                   className="mr-2"
+                 >
+                   <Clock size={16} />
+                 </motion.div>
+                 処理中...
+               </>
+             ) : (
+               <>
+                 <Send className="mr-2 h-4 w-4" />
+                 {isEditing ? "投稿を更新" : "確定"}
+               </>
+             )}
+           </Button>
         </div>
       </div>
     </div>
