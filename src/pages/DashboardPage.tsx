@@ -165,10 +165,25 @@ export default function DashboardPage() {
                 設定完了後、投稿管理を開始できます。
               </p>
 
-              {/* Update History Section */}
+             {/* Update History Section */}
               <div className="mt-6">
                 <h3 className="text-lg font-semibold mb-4">更新履歴</h3>
                 <div className="space-y-4">
+                <div className="border-l-4 border-blue-500 pl-4">
+                    <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold">更新</h4>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        Ver.0.1
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      2025年8月
+                    </p>
+                    <ul className="text-sm space-y-1">
+                      <li>• 画像UPload機能修正</li>
+                      <li>• 新規登録・編集ページ修正</li>
+                    </ul> 
+                  </div>
                   <div className="border-l-4 border-blue-500 pl-4">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-semibold">初版リリース</h4>
@@ -177,7 +192,7 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">
-                      2024年12月
+                      2025年8月
                     </p>
                     <ul className="text-sm space-y-1">
                       <li>• SNS投稿作成・管理機能</li>
@@ -185,7 +200,7 @@ export default function DashboardPage() {
                       <li>• AI生成機能</li>
                       <li>• 複数プラットフォーム対応</li>
                       <li>• スケジュール投稿機能</li>
-                    </ul>
+                    </ul> 
                   </div>
                   {/* 更新履歴は手動で更新されます。新しいバージョンの情報をここにコピー＆ペーストしてください。 */}
                 </div>
