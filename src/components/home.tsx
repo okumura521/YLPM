@@ -57,7 +57,8 @@ interface Post {
   channels?: string[];
   status: "pending" | "sent" | "failed" | "draft";
   updatedAt: string;
-  imageUrl?: string;
+//  imageUrl?: string;
+  imageIds?: string[];
 }
 
 const Home = () => {
@@ -511,6 +512,7 @@ const Home = () => {
         content: post.content,
         scheduleTime: post.scheduleTime,
         status: post.status,
+        imageIds: post.imageIds,
       });
 
       if (result.success) {

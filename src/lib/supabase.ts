@@ -752,27 +752,21 @@ export const addPostToGoogleSheet = async (post: any) => {
     await initializeImageUploadListSheet();
 
     // 新しい画像をアップロードして画像IDを生成
-    let imageIds: string[] = [];
-    if (post.images && post.images.length > 0) {
-      for (const image of post.images) {
-        const uploadResult = await uploadImageAndGenerateId(image);
-        if (uploadResult.success) {
-          imageIds.push(uploadResult.imageId);
-          addLogEntry("INFO", "Image uploaded and ID generated", {
-            postId: post.id,
-            imageId: uploadResult.imageId,
-            fileName: uploadResult.fileName,
-          });
-        }
-      }
-    }
+    // PostForm.tsxで画像のアップロード処理を一元化したため、ここでは行わない
+    // post.images は PostForm.tsx から空の配列として渡されるはず
+    let finalImageIds: string[] = post.imageIds || []; 
+    
+    // 念のため重複を除去 (PostForm.tsx側で既にユニークになっているはずだが、安全のため)
+    finalImageIds = [...new Set(finalImageIds)];
 
-    // 既存の画像IDがあれば追加
-    if (post.imageIds && Array.isArray(post.imageIds)) {
-      imageIds = [...imageIds, ...post.imageIds];
-    }
+    addLogEntry("DEBUG", "Image IDs received by addPostToGoogleSheet", {
+      postId: post.id,
+      receivedPostImageIds: post.imageIds, // 受け取ったそのままの post.imageIds
+      finalUniqueImageIds: finalImageIds, // 重複除去後の画像ID
+      imageIdsStringPrepared: finalImageIds.join(","), // シートに書き込む文字列
+    });
 
-    const imageIdsString = imageIds.join(",");
+    const imageIdsString = finalImageIds.join(",");
     const sheetName = encodeURIComponent("投稿データ");
 
     // Ensure the post ID is properly formatted
@@ -854,8 +848,8 @@ export const addPostToGoogleSheet = async (post: any) => {
     addLogEntry("INFO", "Post added to Google Sheet successfully", {
       postId: postId,
       platform: platform,
-      imageIds: imageIds,
-      imageCount: imageIds.length,
+      imageIds: finalImageIds, // 修正
+      imageCount: finalImageIds.length, // 修正
     });
     return { success: true };
   } catch (error) {
@@ -925,9 +919,12 @@ export const updatePostInGoogleSheet = async (postId: string, updates: any) => {
         updatedRow[3] = jstTime.toISOString();
       }
       if (updates.status !== undefined) updatedRow[4] = updates.status;
-      if (updates.deleted !== undefined)
+      if (updates.imageIds !== undefined) {
+        updatedRow[5] = updates.imageIds.join(",");
+      }
+      if (updates.deleted !== undefined){
         updatedRow[8] = updates.deleted ? "TRUE" : "FALSE"; // Delete flag is at index 8
-
+      }
       // Update timestamp in JST
       const now = new Date();
       const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
