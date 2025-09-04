@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -33,6 +33,7 @@ interface PostTableProps {
   onEdit?: (postId: string) => void;
   onDelete?: (postId: string) => void;
   onRefresh?: (postId: string) => void;
+  onAutoRefresh?: () => void;
 }
 
 const PostTable: React.FC<PostTableProps> = ({
@@ -40,12 +41,79 @@ const PostTable: React.FC<PostTableProps> = ({
   onEdit = () => {},
   onDelete = () => {},
   onRefresh = () => {},
+  onAutoRefresh = () => {},
 }) => {
   const [selectedPosts, setSelectedPosts] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{
     key: keyof Post;
     direction: "ascending" | "descending";
   } | null>(null);
+  const [processedPosts, setProcessedPosts] = useState<Post[]>(posts);
+  const [lastRefreshTime, setLastRefreshTime] = useState<string>("");
+
+  // Check for failed posts based on schedule time
+  useEffect(() => {
+    const checkFailedPosts = () => {
+      const now = new Date();
+      const updatedPosts = posts.map((post) => {
+        if (post.status === "pending" && post.scheduleTime) {
+          let scheduleTime: Date;
+          if (post.scheduleTime.includes("-")) {
+            // yyyy-mm-dd HH:MM format
+            scheduleTime = new Date(
+              post.scheduleTime.replace(" ", "T") + ":00",
+            );
+          } else {
+            scheduleTime = new Date(post.scheduleTime);
+          }
+          const timeDiff = now.getTime() - scheduleTime.getTime();
+          const fiveMinutesInMs = 5 * 60 * 1000;
+
+          if (timeDiff > fiveMinutesInMs) {
+            return { ...post, status: "failed" as const };
+          }
+        }
+        return post;
+      });
+      setProcessedPosts(updatedPosts);
+    };
+
+    checkFailedPosts();
+    const interval = setInterval(checkFailedPosts, 60000); // Check every minute
+
+    return () => clearInterval(interval);
+  }, [posts]);
+
+  // Auto refresh every 5 minutes
+  useEffect(() => {
+    const updateLastRefreshTime = () => {
+      const now = new Date();
+      setLastRefreshTime(
+        now.toLocaleString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }),
+      );
+    };
+
+    // Set initial refresh time
+    updateLastRefreshTime();
+
+    const autoRefreshInterval = setInterval(
+      () => {
+        onAutoRefresh();
+        updateLastRefreshTime();
+      },
+      5 * 60 * 1000,
+    ); // 5 minutes
+
+    return () => clearInterval(autoRefreshInterval);
+  }, [onAutoRefresh]);
 
   const handleSort = (key: keyof Post) => {
     let direction: "ascending" | "descending" = "ascending";
@@ -60,7 +128,7 @@ const PostTable: React.FC<PostTableProps> = ({
   };
 
   const sortedPosts = React.useMemo(() => {
-    const postsCopy = [...posts];
+    const postsCopy = [...processedPosts];
     if (sortConfig !== null) {
       postsCopy.sort((a, b) => {
         if (a[sortConfig.key] < b[sortConfig.key]) {
@@ -73,11 +141,11 @@ const PostTable: React.FC<PostTableProps> = ({
       });
     }
     return postsCopy;
-  }, [posts, sortConfig]);
+  }, [processedPosts, sortConfig]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedPosts(posts.map((post) => post.id));
+      setSelectedPosts(processedPosts.map((post) => post.id));
     } else {
       setSelectedPosts([]);
     }
@@ -128,6 +196,11 @@ const PostTable: React.FC<PostTableProps> = ({
             クリックして並び替え
           </div>
         </CardTitle>
+        {lastRefreshTime && (
+          <div className="text-xs text-muted-foreground mt-2 flex flex-row-reverse">
+            最終更新: {lastRefreshTime}
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         <div className="rounded-md border">
@@ -137,7 +210,8 @@ const PostTable: React.FC<PostTableProps> = ({
                 <TableHead className="w-12">
                   <Checkbox
                     checked={
-                      selectedPosts.length === posts.length && posts.length > 0
+                      selectedPosts.length === processedPosts.length &&
+                      processedPosts.length > 0
                     }
                     onCheckedChange={(checked) => handleSelectAll(!!checked)}
                   />
@@ -189,23 +263,54 @@ const PostTable: React.FC<PostTableProps> = ({
                       </div>
                     </TableCell>
                     <TableCell>
-                      {new Date(post.scheduleTime).toLocaleString("ja-JP", {
-                        timeZone: "Asia/Tokyo",
-                        year: "numeric",
-                        month: "2-digit",
-                        day: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
+                      {post.scheduleTime.includes("-")
+                        ? post.scheduleTime.replace(/-/g, "/").replace(" ", " ")
+                        : new Date(post.scheduleTime)
+                            .toLocaleString("ja-JP", {
+                              timeZone: "Asia/Tokyo",
+                              year: "numeric",
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                            .replace(/\/(\d{4})/, "/$1")
+                            .replace(/(\d{2}):(\d{2}):(\d{2})/, "$1:$2")}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        {(post.platforms || []).map((platform) => (
-                          <Badge key={platform} variant="outline">
-                            {platform}
-                          </Badge>
-                        ))}
+                        {(post.platforms || []).map((platform) => {
+                          const getPlatformBadgeStyle = (platform: string) => {
+                            switch (platform.toLowerCase()) {
+                              case "x":
+                              case "twitter":
+                                return "bg-black text-white hover:bg-gray-800";
+                              case "facebook":
+                                return "bg-blue-600 text-white hover:bg-blue-700";
+                              case "instagram":
+                                return "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600";
+                              case "linkedin":
+                                return "bg-blue-700 text-white hover:bg-blue-800";
+                              case "line":
+                                return "bg-green-500 text-white hover:bg-green-600";
+                              case "discord":
+                                return "bg-indigo-600 text-white hover:bg-indigo-700";
+                              case "wordpress":
+                                return "bg-gray-700 text-white hover:bg-gray-800";
+                              default:
+                                return "bg-gray-500 text-white hover:bg-gray-600";
+                            }
+                          };
+
+                          return (
+                            <Badge
+                              key={platform}
+                              className={getPlatformBadgeStyle(platform)}
+                            >
+                              {platform}
+                            </Badge>
+                          );
+                        })}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -214,15 +319,17 @@ const PostTable: React.FC<PostTableProps> = ({
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {new Date(post.updatedAt).toLocaleString("ja-JP", {
-                        timeZone: "Asia/Tokyo",
-                        year: "numeric",
-                        month: "2-digit",
-                        day: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
+                      {new Date(post.updatedAt)
+                        .toLocaleString("ja-JP", {
+                          timeZone: "Asia/Tokyo",
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                        .replace(/\/(\d{4})/, "/$1")
+                        .replace(/(\d{2}):(\d{2}):(\d{2})/, "$1:$2")}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>

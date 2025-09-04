@@ -11,8 +11,6 @@ ADD COLUMN IF NOT EXISTS google_sheet_url TEXT,
 ADD COLUMN IF NOT EXISTS google_sheet_id TEXT,
 ADD COLUMN IF NOT EXISTS google_drive_folder_id TEXT,
 ADD COLUMN IF NOT EXISTS google_drive_folder_name TEXT,
-ADD COLUMN IF NOT EXISTS google_drive_folder_url TEXT,
-ADD COLUMN IF NOT EXISTS images_comma_separated TEXT,
-ADD COLUMN IF NOT EXISTS images_json_array TEXT;
+ADD COLUMN IF NOT EXISTS google_drive_folder_url TEXT;
 
 

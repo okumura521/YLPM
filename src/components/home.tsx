@@ -57,7 +57,7 @@ interface Post {
   channels?: string[];
   status: "pending" | "sent" | "failed" | "draft";
   updatedAt: string;
-//  imageUrl?: string;
+  //  imageUrl?: string;
   imageIds?: string[];
 }
 
@@ -804,10 +804,7 @@ const Home = () => {
             className="w-12 h-12 rounded-lg"
           />
           <div>
-            <h1 className="text-3xl font-bold">
-              Yell-lab-PostMate{" "}
-              <span className="text-lg text-muted-foreground">Ver.0</span>
-            </h1>
+            <h1 className="text-3xl font-bold">投稿作成・管理</h1>
             <p className="text-muted-foreground">SNS投稿作成＆管理システム</p>
           </div>
         </div>

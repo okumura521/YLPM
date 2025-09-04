@@ -60,13 +60,13 @@ export default function DashboardPage() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
               <img
-                src="https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=40&h=40&fit=crop&crop=center"
+                src="/logo.jpg"
                 alt="YLPM Logo"
-                className="w-10 h-10 rounded-lg"
+                className="w-10 h-10 rounded-lg object-cover"
               />
               <div>
                 <h1 className="text-xl font-semibold">
-                  YLPM Dashboard{" "}
+                  Yell-lab-PostMate{" "}
                   <span className="text-sm text-muted-foreground">Ver.0</span>
                 </h1>
                 <p className="text-sm text-muted-foreground">
@@ -103,12 +103,11 @@ export default function DashboardPage() {
                 <Settings className="h-5 w-5" />
                 ユーザー設定
               </CardTitle>
-              <CardDescription>Google連携とAI連携の設定</CardDescription>
+              <CardDescription>ユーザ関連の設定</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Google Sheets API、Google Drive API、AI
-                サービスの設定を行います。
+                AI API の設定を行います。
               </p>
             </CardContent>
           </Card>
@@ -165,13 +164,13 @@ export default function DashboardPage() {
                 設定完了後、投稿管理を開始できます。
               </p>
 
-             {/* Update History Section */}
+              {/* Update History Section */}
               <div className="mt-6">
                 <h3 className="text-lg font-semibold mb-4">更新履歴</h3>
                 <div className="space-y-4">
-                <div className="border-l-4 border-blue-500 pl-4">
+                  <div className="border-l-4 border-blue-500 pl-4">
                     <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold">更新</h4>
+                      <h4 className="font-semibold">更新</h4>
                       <span className="text-xs bg-gray-100 px-2 py-1 rounded">
                         Ver.0.1
                       </span>
@@ -182,7 +181,7 @@ export default function DashboardPage() {
                     <ul className="text-sm space-y-1">
                       <li>• 画像UPload機能修正</li>
                       <li>• 新規登録・編集ページ修正</li>
-                    </ul> 
+                    </ul>
                   </div>
                   <div className="border-l-4 border-blue-500 pl-4">
                     <div className="flex items-center justify-between mb-2">
@@ -200,7 +199,7 @@ export default function DashboardPage() {
                       <li>• AI生成機能</li>
                       <li>• 複数プラットフォーム対応</li>
                       <li>• スケジュール投稿機能</li>
-                    </ul> 
+                    </ul>
                   </div>
                   {/* 更新履歴は手動で更新されます。新しいバージョンの情報をここにコピー＆ペーストしてください。 */}
                 </div>

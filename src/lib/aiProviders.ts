@@ -199,7 +199,7 @@ export const callGoogleAI = async (
   try {
     addLogEntry("INFO", "Calling Google AI API", {
       model,
-      promptLength: prompt.length,
+      prompt,
     });
 
     const response = await fetch(

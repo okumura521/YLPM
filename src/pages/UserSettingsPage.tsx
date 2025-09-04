@@ -211,9 +211,9 @@ export default function UserSettingsPage() {
                 alt="YLPM Logo"
                 className="w-12 h-12 rounded-lg"
               />
-              <h1 className="text-3xl font-bold">AI設定</h1>
+              <h1 className="text-3xl font-bold">ユーザ設定</h1>
             </div>
-            <p className="text-muted-foreground mt-2">AI連携の設定を行います</p>
+            <p className="text-muted-foreground mt-2">ユーザ設定を行います</p>
           </div>
           <Button
             variant="outline"

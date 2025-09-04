@@ -450,7 +450,9 @@ export const createGoogleSheetWithOAuth = async (
                         { userEnteredValue: { stringValue: "画像ID" } },
                         { userEnteredValue: { stringValue: "ファイル名" } },
                         { userEnteredValue: { stringValue: "画像URL" } },
-                        { userEnteredValue: { stringValue: "アップロード日時" } },
+                        {
+                          userEnteredValue: { stringValue: "アップロード日時" },
+                        },
                       ],
                     },
                   ],
@@ -754,8 +756,8 @@ export const addPostToGoogleSheet = async (post: any) => {
     // 新しい画像をアップロードして画像IDを生成
     // PostForm.tsxで画像のアップロード処理を一元化したため、ここでは行わない
     // post.images は PostForm.tsx から空の配列として渡されるはず
-    let finalImageIds: string[] = post.imageIds || []; 
-    
+    let finalImageIds: string[] = post.imageIds || [];
+
     // 念のため重複を除去 (PostForm.tsx側で既にユニークになっているはずだが、安全のため)
     finalImageIds = [...new Set(finalImageIds)];
 
@@ -787,20 +789,25 @@ export const addPostToGoogleSheet = async (post: any) => {
       );
     }
 
-    // Convert schedule time to JST for storage
-    let scheduleTimeJST = new Date().toISOString();
+    // Convert schedule time to JST for storage in yyyy-mm-dd HH:MM format
+    let scheduleTimeJST = new Date()
+      .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
+      .slice(0, 16);
     if (post.scheduleTime) {
       const scheduleTime =
         post.scheduleTime instanceof Date
           ? post.scheduleTime
           : new Date(post.scheduleTime);
-      const jstTime = new Date(scheduleTime.getTime() + 9 * 60 * 60 * 1000);
-      scheduleTimeJST = jstTime.toISOString();
+      // Store as JST in yyyy-mm-dd HH:MM format
+      scheduleTimeJST = scheduleTime
+        .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
+        .slice(0, 16);
     } else {
       // For immediate posts, use current JST time
       const now = new Date();
-      const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-      scheduleTimeJST = jstNow.toISOString();
+      scheduleTimeJST = now
+        .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
+        .slice(0, 16);
     }
 
     // Create and update timestamps in JST
@@ -910,19 +917,20 @@ export const updatePostInGoogleSheet = async (postId: string, updates: any) => {
 
       if (updates.content !== undefined) updatedRow[1] = updates.content;
       if (updates.scheduleTime !== undefined) {
-        // Convert to JST for display
+        // Convert to JST for storage in yyyy-mm-dd HH:MM format
         const scheduleTime =
           updates.scheduleTime instanceof Date
             ? updates.scheduleTime
             : new Date(updates.scheduleTime);
-        const jstTime = new Date(scheduleTime.getTime() + 9 * 60 * 60 * 1000);
-        updatedRow[3] = jstTime.toISOString();
+        updatedRow[3] = scheduleTime
+          .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
+          .slice(0, 16);
       }
       if (updates.status !== undefined) updatedRow[4] = updates.status;
       if (updates.imageIds !== undefined) {
         updatedRow[5] = updates.imageIds.join(",");
       }
-      if (updates.deleted !== undefined){
+      if (updates.deleted !== undefined) {
         updatedRow[8] = updates.deleted ? "TRUE" : "FALSE"; // Delete flag is at index 8
       }
       // Update timestamp in JST
@@ -1023,19 +1031,35 @@ export const fetchPostsFromGoogleSheet = async () => {
       const platform = row[2]; // Platform is always in column 2
 
       if (!postsMap.has(baseId)) {
-        // Convert UTC time to JST for display
-        const utcTime = new Date(row[3] || new Date().toISOString());
-        const jstTime = new Date(utcTime.getTime() + 9 * 60 * 60 * 1000);
+        // Parse schedule time - if it's in yyyy-mm-dd HH:MM format, use it directly
+        // If it's in ISO format, convert to JST
+        let scheduleTimeForDisplay =
+          row[3] ||
+          new Date()
+            .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
+            .slice(0, 16);
+        if (row[3] && row[3].includes("T")) {
+          // Old ISO format, convert to JST
+          const utcTime = new Date(row[3]);
+          scheduleTimeForDisplay = utcTime
+            .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
+            .slice(0, 16);
+        }
 
         // 画像IDを解析
         const imageIdsString = row[5] || "";
-        const imageIds = imageIdsString ? imageIdsString.split(",").map(id => id.trim()).filter(id => id) : [];
+        const imageIds = imageIdsString
+          ? imageIdsString
+              .split(",")
+              .map((id) => id.trim())
+              .filter((id) => id)
+          : [];
 
         postsMap.set(baseId, {
           id: baseId,
           content: row[1] || "",
           platforms: [], // Use platforms instead of channels
-          scheduleTime: jstTime.toISOString(),
+          scheduleTime: scheduleTimeForDisplay,
           status:
             (row[4] as "pending" | "sent" | "failed" | "draft") || "pending",
           imageIds: imageIds, // 画像IDの配列
@@ -1189,7 +1213,10 @@ export const initializeImageUploadListSheet = async () => {
   try {
     const settings = await getUserSettings();
     if (!settings?.google_sheet_id) {
-      addLogEntry("ERROR", "Google Sheet not configured for image upload list initialization");
+      addLogEntry(
+        "ERROR",
+        "Google Sheet not configured for image upload list initialization",
+      );
       throw new Error("Google Sheet not configured");
     }
 
@@ -1197,22 +1224,17 @@ export const initializeImageUploadListSheet = async () => {
     const sheetId = settings.google_sheet_id;
 
     // 画像アップロードリストシートのヘッダーを設定
-    const headers = [
-      "画像ID",
-      "ファイル名", 
-      "画像URL",
-      "アップロード日時"
-    ];
+    const headers = ["画像ID", "ファイル名", "画像URL", "アップロード日時"];
 
-         // シートが存在するかチェック
-     const checkResponse = await fetch(
-       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`,
-       {
-         headers: {
-           Authorization: `Bearer ${accessToken}`,
-         },
-       }
-     );
+    // シートが存在するかチェック
+    const checkResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
 
     if (!checkResponse.ok) {
       throw new Error("Failed to check sheet existence");
@@ -1220,7 +1242,7 @@ export const initializeImageUploadListSheet = async () => {
 
     const sheetsData = await checkResponse.json();
     const imageSheetExists = sheetsData.sheets.some(
-      (sheet: any) => sheet.properties.title === "画像アップロードリスト"
+      (sheet: any) => sheet.properties.title === "画像アップロードリスト",
     );
 
     if (!imageSheetExists) {
@@ -1244,7 +1266,7 @@ export const initializeImageUploadListSheet = async () => {
               },
             ],
           }),
-        }
+        },
       );
 
       if (!createResponse.ok) {
@@ -1263,7 +1285,7 @@ export const initializeImageUploadListSheet = async () => {
           body: JSON.stringify({
             values: [headers],
           }),
-        }
+        },
       );
 
       if (!headerResponse.ok) {
@@ -1290,7 +1312,10 @@ export const uploadImageAndGenerateId = async (file: File) => {
   try {
     const settings = await getUserSettings();
     if (!settings?.google_drive_folder_id) {
-      addLogEntry("ERROR", "Google Drive folder not configured for image upload");
+      addLogEntry(
+        "ERROR",
+        "Google Drive folder not configured for image upload",
+      );
       throw new Error("Google Drive folder not configured");
     }
 
@@ -1313,7 +1338,7 @@ export const uploadImageAndGenerateId = async (file: File) => {
     const uploadResult = await uploadImageToGoogleDrive(
       accessToken,
       file,
-      settings.google_drive_folder_id
+      settings.google_drive_folder_id,
     );
 
     if (!uploadResult.success) {
@@ -1324,28 +1349,30 @@ export const uploadImageAndGenerateId = async (file: File) => {
       throw new Error(uploadResult.message || "Failed to upload image");
     }
 
-         // 画像アップロードリストに追加
-     const sheetId = settings.google_sheet_id;
-     const uploadTime = new Date().toISOString();
-     
-     const addImageResponse = await fetch(
-       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/画像アップロードリスト!A:D:append?valueInputOption=RAW`,
-       {
-         method: "POST",
-         headers: {
-           Authorization: `Bearer ${accessToken}`,
-           "Content-Type": "application/json",
-         },
-         body: JSON.stringify({
-           values: [[
-             imageId,
-             file.name,
-             uploadResult.directUrl || uploadResult.fileUrl,
-             uploadTime
-           ]],
-         }),
-       }
-     );
+    // 画像アップロードリストに追加
+    const sheetId = settings.google_sheet_id;
+    const uploadTime = new Date().toISOString();
+
+    const addImageResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/画像アップロードリスト!A:D:append?valueInputOption=RAW`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          values: [
+            [
+              imageId,
+              file.name,
+              uploadResult.directUrl || uploadResult.fileUrl,
+              uploadTime,
+            ],
+          ],
+        }),
+      },
+    );
 
     if (!addImageResponse.ok) {
       const errorData = await addImageResponse.json().catch(() => ({}));
@@ -1404,7 +1431,7 @@ export const getImageInfoById = async (imageId: string) => {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -1460,7 +1487,7 @@ export const getImagesInfoByIds = async (imageIds: string[]) => {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -1483,7 +1510,7 @@ export const getImagesInfoByIds = async (imageIds: string[]) => {
     }
 
     // 要求された画像IDの情報を取得
-    const results = imageIds.map(id => {
+    const results = imageIds.map((id) => {
       const info = imageMap.get(id);
       return info || { imageId: id, error: "Image not found" };
     });
