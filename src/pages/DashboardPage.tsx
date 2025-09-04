@@ -60,13 +60,13 @@ export default function DashboardPage() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
               <img
-                src="https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=40&h=40&fit=crop&crop=center"
+                src="/logo.jpg"
                 alt="YLPM Logo"
-                className="w-10 h-10 rounded-lg"
+                className="w-10 h-10 rounded-lg object-cover"
               />
               <div>
                 <h1 className="text-xl font-semibold">
-                  YLPM Dashboard{" "}
+                  Yell-lab-PostMate{" "}
                   <span className="text-sm text-muted-foreground">Ver.0</span>
                 </h1>
                 <p className="text-sm text-muted-foreground">
@@ -103,12 +103,11 @@ export default function DashboardPage() {
                 <Settings className="h-5 w-5" />
                 ユーザー設定
               </CardTitle>
-              <CardDescription>Google連携とAI連携の設定</CardDescription>
+              <CardDescription>ユーザ関連の設定</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Google Sheets API、Google Drive API、AI
-                サービスの設定を行います。
+                AI API の設定を行います。
               </p>
             </CardContent>
           </Card>
@@ -165,13 +164,87 @@ export default function DashboardPage() {
                 設定完了後、投稿管理を開始できます。
               </p>
 
-             {/* Update History Section */}
+              {/* YLPM Support Status */}
+              <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
+                <h3 className="text-xl font-bold mb-4 text-blue-800">
+                  YLPM対応状況
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">X (Twitter)</span>
+                      <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                        make側の送信処理開発中
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">Instagram</span>
+                      <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                        make側の送信処理開発中
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">Facebook</span>
+                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
+                        利用可能
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">LINE</span>
+                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
+                        利用可能
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">Discord</span>
+                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
+                        利用可能
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">WordPress</span>
+                      <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                        make側の送信処理開発中
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Usage Restrictions */}
+              <div className="mt-6 p-6 bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-200 rounded-lg">
+                <h3 className="text-xl font-bold mb-4 text-orange-800">
+                  利用制限事項
+                </h3>
+                <div className="space-y-3">
+                  <div className="p-3 bg-white rounded border border-orange-200">
+                    <p className="font-medium text-orange-800">
+                      送信できる画像の枚数
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      最大6枚まで（※Xのみ4枚まで）
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white rounded border border-orange-200">
+                    <p className="font-medium text-orange-800">
+                      画像設定について
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      画像は最低1枚は設定してください。※画像0だと送信エラーになります
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Update History Section */}
               <div className="mt-6">
                 <h3 className="text-lg font-semibold mb-4">更新履歴</h3>
                 <div className="space-y-4">
-                <div className="border-l-4 border-blue-500 pl-4">
+                  <div className="border-l-4 border-blue-500 pl-4">
                     <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold">更新</h4>
+                      <h4 className="font-semibold">更新</h4>
                       <span className="text-xs bg-gray-100 px-2 py-1 rounded">
                         Ver.0.1
                       </span>
@@ -182,7 +255,7 @@ export default function DashboardPage() {
                     <ul className="text-sm space-y-1">
                       <li>• 画像UPload機能修正</li>
                       <li>• 新規登録・編集ページ修正</li>
-                    </ul> 
+                    </ul>
                   </div>
                   <div className="border-l-4 border-blue-500 pl-4">
                     <div className="flex items-center justify-between mb-2">
@@ -200,7 +273,7 @@ export default function DashboardPage() {
                       <li>• AI生成機能</li>
                       <li>• 複数プラットフォーム対応</li>
                       <li>• スケジュール投稿機能</li>
-                    </ul> 
+                    </ul>
                   </div>
                   {/* 更新履歴は手動で更新されます。新しいバージョンの情報をここにコピー＆ペーストしてください。 */}
                 </div>

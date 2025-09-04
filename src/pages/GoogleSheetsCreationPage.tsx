@@ -164,7 +164,14 @@ export default function GoogleSheetsCreationPage() {
               ← 戻る
             </Button>
             <div className="flex-1">
-              <h1 className="text-3xl font-bold">Google Sheets 作成・管理</h1>
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <img
+                  src="/logo.jpg"
+                  alt="YLPM Logo"
+                  className="w-12 h-12 rounded-lg object-cover"
+                />
+                <h1 className="text-3xl font-bold">Google Sheets 作成・管理</h1>
+              </div>
               <p className="text-muted-foreground mt-2">
                 SNS投稿管理用のGoogle Sheetを作成します
               </p>

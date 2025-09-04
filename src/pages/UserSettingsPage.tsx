@@ -207,13 +207,13 @@ export default function UserSettingsPage() {
           <div className="text-center flex-1">
             <div className="flex items-center justify-center gap-3 mb-4">
               <img
-                src="https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=48&h=48&fit=crop&crop=center"
+                src="/logo.jpg"
                 alt="YLPM Logo"
-                className="w-12 h-12 rounded-lg"
+                className="w-12 h-12 rounded-lg object-cover"
               />
-              <h1 className="text-3xl font-bold">AI設定</h1>
+              <h1 className="text-3xl font-bold">ユーザ設定</h1>
             </div>
-            <p className="text-muted-foreground mt-2">AI連携の設定を行います</p>
+            <p className="text-muted-foreground mt-2">ユーザ設定を行います</p>
           </div>
           <Button
             variant="outline"

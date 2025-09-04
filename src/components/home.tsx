@@ -57,7 +57,7 @@ interface Post {
   channels?: string[];
   status: "pending" | "sent" | "failed" | "draft";
   updatedAt: string;
-//  imageUrl?: string;
+  //  imageUrl?: string;
   imageIds?: string[];
 }
 
@@ -73,6 +73,7 @@ const Home = () => {
   const [isLogsDialogOpen, setIsLogsDialogOpen] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [sheetError, setSheetError] = useState<string>("");
+  const [lastRefreshTime, setLastRefreshTime] = useState<string>("");
   const sheetCreationHandled = useRef(false);
   const tokenRefreshAttempted = useRef(false);
   const fetchRetryAttempted = useRef(false);
@@ -135,6 +136,22 @@ const Home = () => {
     }
   };
 
+  // Update last refresh time
+  const updateLastRefreshTime = () => {
+    const now = new Date();
+    setLastRefreshTime(
+      now.toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
+    );
+  };
+
   // Fetch posts from Google Sheets with retry logic
   const fetchPosts = async (retryOnTokenError = true) => {
     setIsLoading(true);
@@ -144,6 +161,7 @@ const Home = () => {
       if (testUser) {
         addLogEntry("INFO", "Test user detected, using mock data");
         setPosts([]);
+        updateLastRefreshTime();
         return;
       }
 
@@ -151,6 +169,7 @@ const Home = () => {
       setPosts(postsFromSheet);
       setSheetError(""); // Clear any existing errors
       fetchRetryAttempted.current = false; // Reset retry flag on success
+      updateLastRefreshTime();
       addLogEntry("INFO", "Posts fetched successfully", {
         count: postsFromSheet.length,
       });
@@ -250,6 +269,14 @@ const Home = () => {
 
     initializeComponent();
 
+    // Auto refresh every 5 minutes
+    const autoRefreshInterval = setInterval(
+      () => {
+        fetchPosts();
+      },
+      5 * 60 * 1000,
+    ); // 5 minutes
+
     // Listen for auth state changes
     const {
       data: { subscription },
@@ -272,6 +299,7 @@ const Home = () => {
 
     return () => {
       isMounted = false;
+      clearInterval(autoRefreshInterval);
       subscription.unsubscribe();
     };
   }, [navigate]);
@@ -799,15 +827,12 @@ const Home = () => {
       <header className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-4">
           <img
-            src="https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=48&h=48&fit=crop&crop=center"
+            src="/logo.jpg"
             alt="YLPM Logo"
-            className="w-12 h-12 rounded-lg"
+            className="w-12 h-12 rounded-lg object-cover"
           />
           <div>
-            <h1 className="text-3xl font-bold">
-              Yell-lab-PostMate{" "}
-              <span className="text-lg text-muted-foreground">Ver.0</span>
-            </h1>
+            <h1 className="text-3xl font-bold">投稿作成・管理</h1>
             <p className="text-muted-foreground">SNS投稿作成＆管理システム</p>
           </div>
         </div>
@@ -889,19 +914,26 @@ const Home = () => {
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle>投稿一覧</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className="flex items-center gap-2"
-          >
-            <RefreshCcwIcon
-              size={16}
-              className={isLoading ? "animate-spin" : ""}
-            />
-            更新
-          </Button>
+          <div className="flex flex-col items-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isLoading}
+              className="flex items-center gap-2"
+            >
+              <RefreshCcwIcon
+                size={16}
+                className={isLoading ? "animate-spin" : ""}
+              />
+              更新
+            </Button>
+            {lastRefreshTime && (
+              <div className="text-xs text-muted-foreground">
+                最終更新: {lastRefreshTime}
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2 mb-4">
