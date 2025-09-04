@@ -164,6 +164,80 @@ export default function DashboardPage() {
                 設定完了後、投稿管理を開始できます。
               </p>
 
+              {/* YLPM Support Status */}
+              <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
+                <h3 className="text-xl font-bold mb-4 text-blue-800">
+                  YLPM対応状況
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">X (Twitter)</span>
+                      <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                        make側の送信処理開発中
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">Instagram</span>
+                      <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                        make側の送信処理開発中
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">Facebook</span>
+                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
+                        利用可能
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">LINE</span>
+                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
+                        利用可能
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">Discord</span>
+                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
+                        利用可能
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-white rounded border">
+                      <span className="font-medium">WordPress</span>
+                      <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                        make側の送信処理開発中
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Usage Restrictions */}
+              <div className="mt-6 p-6 bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-200 rounded-lg">
+                <h3 className="text-xl font-bold mb-4 text-orange-800">
+                  利用制限事項
+                </h3>
+                <div className="space-y-3">
+                  <div className="p-3 bg-white rounded border border-orange-200">
+                    <p className="font-medium text-orange-800">
+                      送信できる画像の枚数
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      最大6枚まで（※Xのみ4枚まで）
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white rounded border border-orange-200">
+                    <p className="font-medium text-orange-800">
+                      画像設定について
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      画像は最低1枚は設定してください。※画像0だと送信エラーになります
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Update History Section */}
               <div className="mt-6">
                 <h3 className="text-lg font-semibold mb-4">更新履歴</h3>

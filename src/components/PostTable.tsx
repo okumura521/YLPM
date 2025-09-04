@@ -33,7 +33,7 @@ interface PostTableProps {
   onEdit?: (postId: string) => void;
   onDelete?: (postId: string) => void;
   onRefresh?: (postId: string) => void;
-  onAutoRefresh?: () => void;
+  //  onAutoRefresh?: () => void;
 }
 
 const PostTable: React.FC<PostTableProps> = ({
@@ -41,7 +41,7 @@ const PostTable: React.FC<PostTableProps> = ({
   onEdit = () => {},
   onDelete = () => {},
   onRefresh = () => {},
-  onAutoRefresh = () => {},
+  //  onAutoRefresh = () => {},
 }) => {
   const [selectedPosts, setSelectedPosts] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{
@@ -83,37 +83,6 @@ const PostTable: React.FC<PostTableProps> = ({
 
     return () => clearInterval(interval);
   }, [posts]);
-
-  // Auto refresh every 5 minutes
-  useEffect(() => {
-    const updateLastRefreshTime = () => {
-      const now = new Date();
-      setLastRefreshTime(
-        now.toLocaleString("ja-JP", {
-          timeZone: "Asia/Tokyo",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }),
-      );
-    };
-
-    // Set initial refresh time
-    updateLastRefreshTime();
-
-    const autoRefreshInterval = setInterval(
-      () => {
-        onAutoRefresh();
-        updateLastRefreshTime();
-      },
-      5 * 60 * 1000,
-    ); // 5 minutes
-
-    return () => clearInterval(autoRefreshInterval);
-  }, [onAutoRefresh]);
 
   const handleSort = (key: keyof Post) => {
     let direction: "ascending" | "descending" = "ascending";
