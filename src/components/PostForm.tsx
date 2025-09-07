@@ -1172,7 +1172,7 @@ const PostForm: React.FC<PostFormProps> = ({
                   });
                 }}
                 disabled={!content.trim() || selectedPlatforms.length === 0}
-                className="w-full"
+                className="w-full bg-green-100 hover:bg-green-200 text-green-800 border-green-300"
               >
                 投稿内容転記ボタン（プラットフォーム別投稿内容に転記・上書き）
               </Button>
