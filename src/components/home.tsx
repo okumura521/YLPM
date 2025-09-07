@@ -826,6 +826,13 @@ const Home = () => {
     <div className="min-h-screen bg-background p-6">
       <header className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-4">
+          <Button
+            onClick={() => navigate("/dashboard")}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            ダッシュボード
+          </Button>
           <img
             src="/logo.jpg"
             alt="YLPM Logo"
@@ -837,13 +844,6 @@ const Home = () => {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <Button
-            onClick={() => navigate("/dashboard")}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            ダッシュボード
-          </Button>
           <Button
             onClick={() => setIsCreateDialogOpen(true)}
             className="flex items-center gap-2"

@@ -160,8 +160,11 @@ export default function GoogleSheetsCreationPage() {
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="text-center">
           <div className="flex items-center justify-between mb-4">
-            <Button variant="outline" onClick={() => window.history.back()}>
-              ← 戻る
+            <Button
+              variant="outline"
+              onClick={() => (window.location.href = "/dashboard")}
+            >
+              ← ダッシュボード
             </Button>
             <div className="flex-1">
               <div className="flex items-center justify-center gap-3 mb-4">
