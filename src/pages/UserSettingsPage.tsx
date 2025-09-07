@@ -19,13 +19,7 @@ import {
 } from "@/components/ui/select";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  Loader2,
-  CheckCircle,
-  XCircle,
-  X,
-  FileSpreadsheet,
-} from "lucide-react";
+import { Loader2, CheckCircle, XCircle, FileSpreadsheet } from "lucide-react";
 import {
   saveUserSettings,
   getUserSettings,
@@ -203,7 +197,14 @@ export default function UserSettingsPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex items-center">
+          <Button
+            variant="outline"
+            onClick={() => navigate("/dashboard")}
+            className="flex items-center gap-2 mr-4"
+          >
+            ← ダッシュボード
+          </Button>
           <div className="text-center flex-1">
             <div className="flex items-center justify-center gap-3 mb-4">
               <img
@@ -215,14 +216,6 @@ export default function UserSettingsPage() {
             </div>
             <p className="text-muted-foreground mt-2">ユーザ設定を行います</p>
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => navigate("/")}
-            className="ml-4"
-          >
-            <X className="h-4 w-4" />
-          </Button>
         </div>
 
         {/* AI Settings */}
