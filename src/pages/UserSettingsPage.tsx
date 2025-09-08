@@ -19,10 +19,19 @@ import {
 } from "@/components/ui/select";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, CheckCircle, XCircle, FileSpreadsheet } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
-  saveUserSettings,
-  getUserSettings,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, CheckCircle, XCircle, Edit, Plus } from "lucide-react";
+import {
+  getAISettings,
+  saveAISettings,
+  updateSelectedAIService,
   testAIConnection,
 } from "@/lib/supabase";
 
@@ -52,147 +61,255 @@ const AI_MODELS = {
   ],
 };
 
+interface AISettingItem {
+  ai_service: string;
+  ai_model: string;
+  ai_api_token: string;
+  ai_connection_status: boolean;
+  is_selected: boolean;
+}
+
 export default function UserSettingsPage() {
   const [loading, setLoading] = useState(false);
   const [aiTesting, setAiTesting] = useState(false);
+  const [loadingSettings, setLoadingSettings] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // AI settings
-  const [aiService, setAiService] = useState("");
-  const [aiModel, setAiModel] = useState("");
-  const [aiApiToken, setAiApiToken] = useState("");
-  const [aiConnectionStatus, setAiConnectionStatus] = useState(false);
+  // AI settings list
+  const [aiSettingsList, setAiSettingsList] = useState<AISettingItem[]>([]);
 
-  // Sheet settings
-  const [googleSheetUrl, setGoogleSheetUrl] = useState("");
-  const [googleDriveFolderId, setGoogleDriveFolderId] = useState("");
-  const [googleDriveFolderName, setGoogleDriveFolderName] = useState("");
-  const [googleDriveFolderUrl, setGoogleDriveFolderUrl] = useState("");
+  // Edit dialog state
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingService, setEditingService] = useState<AISettingItem | null>(
+    null,
+  );
+  const [editAiModel, setEditAiModel] = useState("");
+  const [editAiApiToken, setEditAiApiToken] = useState("");
 
-  // Load existing settings
+  // Add new service dialog state
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [newAiService, setNewAiService] = useState("");
+  const [newAiModel, setNewAiModel] = useState("");
+  const [newAiApiToken, setNewAiApiToken] = useState("");
+
+  // Load AI settings from Google Sheets
+  const loadAISettings = async () => {
+    try {
+      setLoadingSettings(true);
+      const result = await getAISettings();
+      if (result.success) {
+        setAiSettingsList(result.aiSettings);
+      } else {
+        toast({
+          title: "設定読み込みエラー",
+          description: result.error || "AI設定の読み込みに失敗しました",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load AI settings:", error);
+      toast({
+        title: "設定読み込みエラー",
+        description: "AI設定の読み込みに失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
+
   useEffect(() => {
-    const loadSettings = async () => {
+    loadAISettings();
+  }, []);
+
+  // Handle service toggle
+  const handleServiceToggle = async (service: string, isSelected: boolean) => {
+    if (isSelected) {
       try {
-        const settings = await getUserSettings();
-        if (settings) {
-          setGoogleSheetUrl(settings.google_sheet_url || "");
-          setGoogleDriveFolderId(settings.google_drive_folder_id || "");
-          setGoogleDriveFolderName(settings.google_drive_folder_name || "");
-          setGoogleDriveFolderUrl(settings.google_drive_folder_url || "");
-          setAiService(settings.ai_service || "");
-          setAiModel(settings.ai_model || "");
-          setAiApiToken(settings.ai_api_token || "");
-          setAiConnectionStatus(settings.ai_connection_status || false);
+        setLoading(true);
+        const result = await updateSelectedAIService(service);
+        if (result.success) {
+          await loadAISettings(); // Reload to get updated state
+          toast({
+            title: "設定更新完了",
+            description: `${service}が選択されました`,
+          });
+        } else {
+          throw new Error(result.error);
         }
       } catch (error) {
-        console.error("Failed to load settings:", error);
+        toast({
+          title: "設定更新エラー",
+          description: "AI設定の更新に失敗しました",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
       }
-    };
-    loadSettings();
-  }, []);
+    } else {
+      // If turning off, update only this service
+      const currentSetting = aiSettingsList.find(
+        (s) => s.ai_service === service,
+      );
+      if (currentSetting) {
+        try {
+          setLoading(true);
+          const result = await saveAISettings({
+            ...currentSetting,
+            is_selected: false,
+          });
+          if (result.success) {
+            await loadAISettings();
+            toast({
+              title: "設定更新完了",
+              description: `${service}の選択が解除されました`,
+            });
+          } else {
+            throw new Error(result.error);
+          }
+        } catch (error) {
+          toast({
+            title: "設定更新エラー",
+            description: "AI設定の更新に失敗しました",
+            variant: "destructive",
+          });
+        } finally {
+          setLoading(false);
+        }
+      }
+    }
+  };
+
+  // Handle edit button click
+  const handleEditClick = (setting: AISettingItem) => {
+    setEditingService(setting);
+    setEditAiModel(setting.ai_model);
+    setEditAiApiToken(setting.ai_api_token);
+    setIsEditDialogOpen(true);
+  };
+
+  // Handle edit save
+  const handleEditSave = async () => {
+    if (!editingService) return;
+
+    if (!editAiModel.trim() || !editAiApiToken.trim()) {
+      toast({
+        title: "入力エラー",
+        description: "モデルとAPIトークンを入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Test connection first
+      const testResult = await testAIConnection(
+        editingService.ai_service,
+        editAiModel,
+        editAiApiToken,
+      );
+
+      const result = await saveAISettings({
+        ...editingService,
+        ai_model: editAiModel,
+        ai_api_token: editAiApiToken,
+        ai_connection_status: testResult.success,
+      });
+
+      if (result.success) {
+        await loadAISettings();
+        setIsEditDialogOpen(false);
+        setEditingService(null);
+        toast({
+          title: "設定更新完了",
+          description: `${editingService.ai_service}の設定が更新されました`,
+        });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      toast({
+        title: "設定更新エラー",
+        description: "AI設定の更新に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle add new service
+  const handleAddService = async () => {
+    if (!newAiService || !newAiModel.trim() || !newAiApiToken.trim()) {
+      toast({
+        title: "入力エラー",
+        description: "すべての項目を入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if service already exists
+    if (aiSettingsList.some((s) => s.ai_service === newAiService)) {
+      toast({
+        title: "設定エラー",
+        description: "このAIサービスは既に設定されています",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Test connection first
+      const testResult = await testAIConnection(
+        newAiService,
+        newAiModel,
+        newAiApiToken,
+      );
+
+      const result = await saveAISettings({
+        ai_service: newAiService,
+        ai_model: newAiModel,
+        ai_api_token: newAiApiToken,
+        ai_connection_status: testResult.success,
+        is_selected: false,
+      });
+
+      if (result.success) {
+        await loadAISettings();
+        setIsAddDialogOpen(false);
+        setNewAiService("");
+        setNewAiModel("");
+        setNewAiApiToken("");
+        toast({
+          title: "設定追加完了",
+          description: `${newAiService}の設定が追加されました`,
+        });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      toast({
+        title: "設定追加エラー",
+        description: "AI設定の追加に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Update available models when AI service changes
   useEffect(() => {
-    if (aiService && AI_MODELS[aiService as keyof typeof AI_MODELS]) {
-      setAiModel(""); // Reset model selection
+    if (newAiService && AI_MODELS[newAiService as keyof typeof AI_MODELS]) {
+      setNewAiModel(""); // Reset model selection
     }
-  }, [aiService]);
-
-  const validateAiForm = () => {
-    if (!aiService || !aiModel || !aiApiToken.trim()) {
-      toast({
-        title: "入力エラー",
-        description: "すべてのAI設定項目を入力してください",
-        variant: "destructive",
-      });
-      return false;
-    }
-    return true;
-  };
-
-  const handleAiConnectionTest = async () => {
-    if (!validateAiForm()) return;
-
-    setAiTesting(true);
-    try {
-      const result = await testAIConnection(aiService, aiModel, aiApiToken);
-      setAiConnectionStatus(result.success);
-
-      toast({
-        title: result.success ? "接続成功" : "接続失敗",
-        description: result.message,
-        variant: result.success ? "default" : "destructive",
-      });
-    } catch (error) {
-      setAiConnectionStatus(false);
-      toast({
-        title: "接続エラー",
-        description: "接続テストに失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setAiTesting(false);
-    }
-  };
-
-  const handleSaveSettings = async () => {
-    if (!validateAiForm()) return;
-
-    setLoading(true);
-    try {
-      await saveUserSettings({
-        aiService,
-        aiModel,
-        aiApiToken,
-        aiConnectionStatus,
-      });
-
-      toast({
-        title: "保存完了",
-        description: "設定が正常に保存されました",
-      });
-    } catch (error) {
-      toast({
-        title: "保存エラー",
-        description: "設定の保存に失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteAiSettings = async () => {
-    setLoading(true);
-    try {
-      await saveUserSettings({
-        aiService: "",
-        aiModel: "",
-        aiApiToken: "",
-        aiConnectionStatus: false,
-      });
-
-      // Clear form fields
-      setAiService("");
-      setAiModel("");
-      setAiApiToken("");
-      setAiConnectionStatus(false);
-
-      toast({
-        title: "削除完了",
-        description: "AI設定が削除されました",
-      });
-    } catch (error) {
-      toast({
-        title: "削除エラー",
-        description: "AI設定の削除に失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [newAiService]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -221,20 +338,160 @@ export default function UserSettingsPage() {
         {/* AI Settings */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              AI連携設定
-              {aiConnectionStatus ? (
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              ) : (
-                <XCircle className="h-5 w-5 text-red-500" />
-              )}
-            </CardTitle>
-            <CardDescription>AI サービスの設定</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  AI連携設定
+                </CardTitle>
+                <CardDescription>AI サービスの設定と管理</CardDescription>
+              </div>
+              <Button
+                onClick={() => setIsAddDialogOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                新規追加
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {loadingSettings ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                設定を読み込み中...
+              </div>
+            ) : aiSettingsList.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                AI設定がありません。新規追加ボタンから設定を追加してください。
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {aiSettingsList.map((setting, index) => (
+                  <Card key={index} className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={setting.is_selected}
+                            onCheckedChange={(checked) =>
+                              handleServiceToggle(setting.ai_service, checked)
+                            }
+                            disabled={loading}
+                          />
+                          <Badge
+                            variant={
+                              setting.is_selected ? "default" : "outline"
+                            }
+                            className={setting.is_selected ? "bg-blue-600" : ""}
+                          >
+                            {setting.ai_service}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {setting.ai_connection_status ? (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-500" />
+                          )}
+                          <span className="text-sm text-muted-foreground">
+                            {setting.ai_connection_status
+                              ? "接続確認済み"
+                              : "未確認"}
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditClick(setting)}
+                        className="flex items-center gap-2"
+                      >
+                        <Edit className="h-4 w-4" />
+                        編集
+                      </Button>
+                    </div>
+                    <div className="mt-2 text-sm text-muted-foreground">
+                      <p>モデル: {setting.ai_model}</p>
+                      <p>
+                        APIトークン:{" "}
+                        {setting.ai_api_token ? "設定済み" : "未設定"}
+                      </p>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Navigation Button */}
+        <div className="flex justify-between items-center">
+          <Button variant="outline" onClick={() => navigate("/dashboard")}>
+            ← ダッシュボードに戻る
+          </Button>
+        </div>
+      </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>AI設定編集 - {editingService?.ai_service}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="ai-service">AIサービス</Label>
-              <Select value={aiService} onValueChange={setAiService}>
+              <Label htmlFor="edit-ai-model">モデル</Label>
+              <Select value={editAiModel} onValueChange={setEditAiModel}>
+                <SelectTrigger>
+                  <SelectValue placeholder="モデルを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {editingService &&
+                    AI_MODELS[
+                      editingService.ai_service as keyof typeof AI_MODELS
+                    ]?.map((model) => (
+                      <SelectItem key={model} value={model}>
+                        {model}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-ai-api-token">APIトークン</Label>
+              <PasswordInput
+                id="edit-ai-api-token"
+                value={editAiApiToken}
+                onChange={(e) => setEditAiApiToken(e.target.value)}
+                placeholder="API トークンを入力"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+              >
+                キャンセル
+              </Button>
+              <Button onClick={handleEditSave} disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                保存
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add New Service Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>新しいAI設定を追加</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-ai-service">AIサービス</Label>
+              <Select value={newAiService} onValueChange={setNewAiService}>
                 <SelectTrigger>
                   <SelectValue placeholder="AIサービスを選択" />
                 </SelectTrigger>
@@ -246,18 +503,18 @@ export default function UserSettingsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ai-model">モデル</Label>
+              <Label htmlFor="new-ai-model">モデル</Label>
               <Select
-                value={aiModel}
-                onValueChange={setAiModel}
-                disabled={!aiService}
+                value={newAiModel}
+                onValueChange={setNewAiModel}
+                disabled={!newAiService}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="モデルを選択" />
                 </SelectTrigger>
                 <SelectContent>
-                  {aiService &&
-                    AI_MODELS[aiService as keyof typeof AI_MODELS]?.map(
+                  {newAiService &&
+                    AI_MODELS[newAiService as keyof typeof AI_MODELS]?.map(
                       (model) => (
                         <SelectItem key={model} value={model}>
                           {model}
@@ -268,50 +525,34 @@ export default function UserSettingsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ai-api-token">APIトークン</Label>
+              <Label htmlFor="new-ai-api-token">APIトークン</Label>
               <PasswordInput
-                id="ai-api-token"
-                value={aiApiToken}
-                onChange={(e) => setAiApiToken(e.target.value)}
+                id="new-ai-api-token"
+                value={newAiApiToken}
+                onChange={(e) => setNewAiApiToken(e.target.value)}
                 placeholder="API トークンを入力"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 justify-end">
               <Button
-                onClick={handleAiConnectionTest}
-                disabled={aiTesting}
                 variant="outline"
+                onClick={() => {
+                  setIsAddDialogOpen(false);
+                  setNewAiService("");
+                  setNewAiModel("");
+                  setNewAiApiToken("");
+                }}
               >
-                {aiTesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                接続確認
+                キャンセル
               </Button>
-              <Button
-                onClick={handleDeleteAiSettings}
-                disabled={loading}
-                variant="destructive"
-              >
-                AI設定削除
+              <Button onClick={handleAddService} disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                追加
               </Button>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Navigation and Save Button */}
-        <div className="flex justify-between items-center">
-          <Button variant="outline" onClick={() => navigate("/dashboard")}>
-            ← ダッシュボードに戻る
-          </Button>
-          <Button
-            onClick={handleSaveSettings}
-            disabled={loading}
-            size="lg"
-            className="px-8"
-          >
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            設定を保存
-          </Button>
-        </div>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

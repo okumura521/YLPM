@@ -52,30 +52,57 @@ export const testAIConnection = async (
       throw new Error("All AI service credentials are required");
     }
 
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    addLogEntry("INFO", "Testing AI connection", {
+      service,
+      model,
+    });
 
-    // Basic format validation based on service
-    switch (service) {
-      case "OpenAI":
-        if (!apiToken.startsWith("sk-")) {
-          throw new Error("Invalid OpenAI API key format");
-        }
+    // Import AI providers dynamically to avoid circular imports
+    const { callOpenAI, callAnthropic, callGoogleAI } = await import(
+      "./aiProviders"
+    );
+
+    // Test prompt for connection verification
+    const testPrompt = "Hello";
+
+    let result;
+    switch (service.toLowerCase()) {
+      case "openai":
+        result = await callOpenAI(testPrompt, model, apiToken);
         break;
-      case "Anthropic":
-        if (!apiToken.startsWith("sk-ant-")) {
-          throw new Error("Invalid Anthropic API key format");
-        }
+      case "anthropic":
+        result = await callAnthropic(testPrompt, model, apiToken);
         break;
-      case "Gemini":
-        if (apiToken.length < 20) {
-          throw new Error("Invalid Gemini API key format");
-        }
+      case "google":
+        result = await callGoogleAI(testPrompt, model, apiToken);
         break;
+      default:
+        throw new Error(`サポートされていないAIサービス: ${service}`);
     }
 
-    return { success: true, message: `${service} connection successful` };
+    if (result.success) {
+      addLogEntry("INFO", "AI connection test successful", {
+        service,
+        model,
+      });
+      return { success: true, message: `${service} connection successful` };
+    } else {
+      addLogEntry("ERROR", "AI connection test failed", {
+        service,
+        model,
+        error: result.error,
+      });
+      return {
+        success: false,
+        message: result.error || "Connection failed",
+      };
+    }
   } catch (error) {
+    addLogEntry("ERROR", "AI connection test error", {
+      service,
+      model,
+      error,
+    });
     return {
       success: false,
       message: error instanceof Error ? error.message : "Connection failed",
@@ -83,17 +110,13 @@ export const testAIConnection = async (
   }
 };
 
-// Save user settings
+// Save user settings (Google Sheets related only)
 export const saveUserSettings = async (settings: {
   googleSheetId?: string;
   googleSheetUrl?: string;
   googleDriveFolderId?: string;
   googleDriveFolderName?: string;
   googleDriveFolderUrl?: string;
-  aiService?: string;
-  aiModel?: string;
-  aiApiToken?: string;
-  aiConnectionStatus?: boolean;
 }) => {
   const {
     data: { user },
@@ -125,13 +148,6 @@ export const saveUserSettings = async (settings: {
       updateData.google_drive_folder_name = settings.googleDriveFolderName;
     if (settings.googleDriveFolderUrl !== undefined)
       updateData.google_drive_folder_url = settings.googleDriveFolderUrl;
-    if (settings.aiService !== undefined)
-      updateData.ai_service = settings.aiService;
-    if (settings.aiModel !== undefined) updateData.ai_model = settings.aiModel;
-    if (settings.aiApiToken !== undefined)
-      updateData.ai_api_token = settings.aiApiToken;
-    if (settings.aiConnectionStatus !== undefined)
-      updateData.ai_connection_status = settings.aiConnectionStatus;
 
     const result = await supabase
       .from("user_settings")
@@ -153,10 +169,6 @@ export const saveUserSettings = async (settings: {
         google_drive_folder_id: settings.googleDriveFolderId,
         google_drive_folder_name: settings.googleDriveFolderName,
         google_drive_folder_url: settings.googleDriveFolderUrl,
-        ai_service: settings.aiService,
-        ai_model: settings.aiModel,
-        ai_api_token: settings.aiApiToken,
-        ai_connection_status: settings.aiConnectionStatus,
       })
       .select()
       .single();
@@ -1204,6 +1216,324 @@ export const addLogEntry = (type: string, message: string, data?: any) => {
 // Clear logs
 export const clearLogs = () => {
   localStorage.removeItem("ylpm_logs");
+};
+
+// ===== AI設定管理機能（Google Sheets） =====
+
+// AI設定シートを初期化
+export const initializeAISettingsSheet = async () => {
+  try {
+    const settings = await getUserSettings();
+    if (!settings?.google_sheet_id) {
+      throw new Error("Google Sheet not configured");
+    }
+
+    const accessToken = await getGoogleAccessToken();
+    const sheetId = settings.google_sheet_id;
+
+    // AI設定シートのヘッダーを設定
+    const headers = [
+      "ai_service",
+      "ai_model",
+      "ai_api_token",
+      "ai_connection_status",
+      "is_selected",
+    ];
+
+    // シートが存在するかチェック
+    const checkResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    if (!checkResponse.ok) {
+      throw new Error("Failed to check sheet existence");
+    }
+
+    const sheetsData = await checkResponse.json();
+    const aiSettingsSheetExists = sheetsData.sheets.some(
+      (sheet: any) => sheet.properties.title === "ユーザ設定",
+    );
+
+    if (!aiSettingsSheetExists) {
+      // 新しいシートを作成
+      const createResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            requests: [
+              {
+                addSheet: {
+                  properties: {
+                    title: "ユーザ設定",
+                  },
+                },
+              },
+            ],
+          }),
+        },
+      );
+
+      if (!createResponse.ok) {
+        throw new Error("Failed to create AI settings sheet");
+      }
+
+      // ヘッダーを設定
+      const headerResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/ユーザ設定!A1:E1?valueInputOption=RAW`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            values: [headers],
+          }),
+        },
+      );
+
+      if (!headerResponse.ok) {
+        throw new Error("Failed to set AI settings headers");
+      }
+    }
+
+    addLogEntry("INFO", "AI settings sheet initialized successfully");
+    return { success: true };
+  } catch (error) {
+    console.error("Error initializing AI settings sheet:", error);
+    addLogEntry("ERROR", "Error initializing AI settings sheet", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+// AI設定を取得
+export const getAISettings = async () => {
+  try {
+    const settings = await getUserSettings();
+    if (!settings?.google_sheet_id) {
+      return { success: true, aiSettings: [] };
+    }
+
+    const accessToken = await getGoogleAccessToken();
+    const sheetId = settings.google_sheet_id;
+
+    // AI設定シートを初期化
+    await initializeAISettingsSheet();
+
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/ユーザ設定!A:E`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch AI settings");
+    }
+
+    const data = await response.json();
+    const rows = data.values || [];
+
+    // ヘッダーをスキップしてAI設定を取得
+    const aiSettings = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row[0]) {
+        // ai_serviceが存在する場合のみ
+        aiSettings.push({
+          ai_service: row[0],
+          ai_model: row[1] || "",
+          ai_api_token: row[2] || "",
+          ai_connection_status: row[3] === "TRUE",
+          is_selected: row[4] === "TRUE",
+        });
+      }
+    }
+
+    addLogEntry("INFO", "AI settings fetched successfully", {
+      count: aiSettings.length,
+    });
+    return { success: true, aiSettings };
+  } catch (error) {
+    console.error("Error getting AI settings:", error);
+    addLogEntry("ERROR", "Error getting AI settings", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      aiSettings: [],
+    };
+  }
+};
+
+// AI設定を保存/更新
+export const saveAISettings = async (aiSettings: {
+  ai_service: string;
+  ai_model: string;
+  ai_api_token: string;
+  ai_connection_status: boolean;
+  is_selected: boolean;
+}) => {
+  try {
+    const settings = await getUserSettings();
+    if (!settings?.google_sheet_id) {
+      throw new Error("Google Sheet not configured");
+    }
+
+    const accessToken = await getGoogleAccessToken();
+    const sheetId = settings.google_sheet_id;
+
+    // AI設定シートを初期化
+    await initializeAISettingsSheet();
+
+    // 既存の設定を取得
+    const existingSettings = await getAISettings();
+    if (!existingSettings.success) {
+      throw new Error("Failed to get existing AI settings");
+    }
+
+    // 既存の設定から該当するサービスを探す
+    const existingIndex = existingSettings.aiSettings.findIndex(
+      (setting: any) => setting.ai_service === aiSettings.ai_service,
+    );
+
+    if (existingIndex >= 0) {
+      // 既存の設定を更新
+      const rowIndex = existingIndex + 2; // ヘッダー行 + 1-based indexing
+      const updateResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/ユーザ設定!A${rowIndex}:E${rowIndex}?valueInputOption=RAW`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            values: [
+              [
+                aiSettings.ai_service,
+                aiSettings.ai_model,
+                aiSettings.ai_api_token,
+                aiSettings.ai_connection_status ? "TRUE" : "FALSE",
+                aiSettings.is_selected ? "TRUE" : "FALSE",
+              ],
+            ],
+          }),
+        },
+      );
+
+      if (!updateResponse.ok) {
+        throw new Error("Failed to update AI settings");
+      }
+    } else {
+      // 新しい設定を追加
+      const appendResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/ユーザ設定!A:E:append?valueInputOption=RAW`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            values: [
+              [
+                aiSettings.ai_service,
+                aiSettings.ai_model,
+                aiSettings.ai_api_token,
+                aiSettings.ai_connection_status ? "TRUE" : "FALSE",
+                aiSettings.is_selected ? "TRUE" : "FALSE",
+              ],
+            ],
+          }),
+        },
+      );
+
+      if (!appendResponse.ok) {
+        throw new Error("Failed to add AI settings");
+      }
+    }
+
+    addLogEntry("INFO", "AI settings saved successfully", aiSettings);
+    return { success: true };
+  } catch (error) {
+    console.error("Error saving AI settings:", error);
+    addLogEntry("ERROR", "Error saving AI settings", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+// 選択されたAI設定を更新（他の設定のis_selectedをfalseにする）
+export const updateSelectedAIService = async (selectedService: string) => {
+  try {
+    const existingSettings = await getAISettings();
+    if (!existingSettings.success) {
+      throw new Error("Failed to get existing AI settings");
+    }
+
+    // 全ての設定のis_selectedを更新
+    for (const setting of existingSettings.aiSettings) {
+      const updatedSetting = {
+        ...setting,
+        is_selected: setting.ai_service === selectedService,
+      };
+      await saveAISettings(updatedSetting);
+    }
+
+    addLogEntry("INFO", "Selected AI service updated", { selectedService });
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating selected AI service:", error);
+    addLogEntry("ERROR", "Error updating selected AI service", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+// 選択されたAI設定を取得
+export const getSelectedAISettings = async () => {
+  try {
+    const result = await getAISettings();
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    const selectedSetting = result.aiSettings.find(
+      (setting: any) => setting.is_selected,
+    );
+
+    if (!selectedSetting) {
+      return { success: true, aiSettings: null };
+    }
+
+    return { success: true, aiSettings: selectedSetting };
+  } catch (error) {
+    console.error("Error getting selected AI settings:", error);
+    addLogEntry("ERROR", "Error getting selected AI settings", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
 };
 
 // ===== 画像管理機能 =====

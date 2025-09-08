@@ -41,6 +41,7 @@ import {
   getUserSettings,
   uploadImageAndGenerateId, // 追加
   getImagesInfoByIds, // 追加
+  getSelectedAISettings, // 追加
 } from "@/lib/supabase";
 import { callAI, buildPrompt } from "@/lib/aiProviders";
 import { useToast } from "@/components/ui/use-toast";
@@ -503,24 +504,33 @@ const PostForm: React.FC<PostFormProps> = ({
     const loadAiSettings = async () => {
       try {
         setLoadingAiSettings(true);
-        const settings = await getUserSettings();
+        const { getSelectedAISettings } = await import("@/lib/supabase");
+        const result = await getSelectedAISettings();
 
         if (!isMounted) return; // コンポーネントがアンマウントされている場合は処理を中断
 
-        setAiSettings(settings);
+        if (result.success && result.aiSettings) {
+          setAiSettings(result.aiSettings);
+          const isConfigured = !!(
+            result.aiSettings.ai_service &&
+            result.aiSettings.ai_model &&
+            result.aiSettings.ai_api_token &&
+            result.aiSettings.ai_connection_status
+          );
+          setAiConfigured(isConfigured);
 
-        const isConfigured = !!(
-          settings?.ai_service &&
-          settings?.ai_model &&
-          settings?.ai_api_token &&
-          settings?.ai_connection_status
-        );
-        setAiConfigured(isConfigured);
-
-        addLogEntry("INFO", "AI settings loaded in PostForm", {
-          isConfigured,
-          componentId: "PostForm",
-        });
+          addLogEntry("INFO", "AI settings loaded in PostForm", {
+            isConfigured,
+            componentId: "PostForm",
+            aiService: result.aiSettings.ai_service,
+          });
+        } else {
+          setAiSettings(null);
+          setAiConfigured(false);
+          addLogEntry("INFO", "No AI settings configured", {
+            componentId: "PostForm",
+          });
+        }
       } catch (error) {
         if (isMounted) {
           addLogEntry("ERROR", "Failed to load AI settings in PostForm", error);
