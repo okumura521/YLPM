@@ -16,10 +16,6 @@ export type Database = {
     Tables: {
       user_settings: {
         Row: {
-          ai_api_token: string | null
-          ai_connection_status: boolean | null
-          ai_model: string | null
-          ai_service: string | null
           created_at: string | null
           google_drive_folder_id: string | null
           google_drive_folder_name: string | null
@@ -31,10 +27,6 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
-          ai_api_token?: string | null
-          ai_connection_status?: boolean | null
-          ai_model?: string | null
-          ai_service?: string | null
           created_at?: string | null
           google_drive_folder_id?: string | null
           google_drive_folder_name?: string | null
@@ -46,10 +38,6 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
-          ai_api_token?: string | null
-          ai_connection_status?: boolean | null
-          ai_model?: string | null
-          ai_service?: string | null
           created_at?: string | null
           google_drive_folder_id?: string | null
           google_drive_folder_name?: string | null
