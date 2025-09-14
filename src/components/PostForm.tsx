@@ -42,6 +42,10 @@ import {
   uploadImageAndGenerateId, // 追加
   getImagesInfoByIds, // 追加
   getSelectedAISettings, // 追加
+  checkDropboxConnection, // 追加
+  uploadImageToDropbox, // 追加
+  updateImageDropboxUrl, // 追加
+  addDropboxColumnToImageSheet, // 追加
 } from "@/lib/supabase";
 import { callAI, buildPrompt } from "@/lib/aiProviders";
 import { useToast } from "@/components/ui/use-toast";
@@ -131,6 +135,7 @@ const PostForm: React.FC<PostFormProps> = ({
   const [loadingAiSettings, setLoadingAiSettings] = useState<boolean>(true);
   const [imageLoadError, setImageLoadError] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [dropboxConnected, setDropboxConnected] = useState<boolean>(false);
 
   const {
     register,
@@ -226,7 +231,7 @@ const PostForm: React.FC<PostFormProps> = ({
           setSelectedPlatforms(availablePlatforms);
           setIsScheduled(primaryPost.isScheduled || false);
 
-          // プラットフォーム別の投稿内容を設定
+          // プラットフォーム別の投稿内容を設���
           const newPlatformContent: Record<string, string> = {};
           // const newPlatformImages: Record<string, File[]> = {}; // 型を修正
           const newPlatformSchedules: Record<
@@ -543,7 +548,22 @@ const PostForm: React.FC<PostFormProps> = ({
       }
     };
 
+    const loadDropboxConnection = async () => {
+      try {
+        const dropboxStatus = await checkDropboxConnection();
+        if (isMounted) {
+          setDropboxConnected(dropboxStatus.connected);
+        }
+      } catch (error) {
+        if (isMounted) {
+          addLogEntry("ERROR", "Failed to check Dropbox connection", error);
+          setDropboxConnected(false);
+        }
+      }
+    };
+
     loadAiSettings();
+    loadDropboxConnection();
 
     return () => {
       isMounted = false;
@@ -766,7 +786,7 @@ const PostForm: React.FC<PostFormProps> = ({
       let errorMessage = "コンテンツの生成に失敗しました";
       if (error instanceof Error) {
         if (error.message.includes("APIキー")) {
-          errorMessage = "APIキーが無効です。設定を確認してください。";
+          errorMessage = "APIキーが無��です。設定を確認してください。";
         } else if (error.message.includes("レート制限")) {
           errorMessage =
             "レート制限に達しました。しばらく待ってから再試行してください。";
@@ -797,7 +817,7 @@ const PostForm: React.FC<PostFormProps> = ({
         toast({
           title: "文字数制限エラー",
           description:
-            "一部のプラットフォームで文字数制限を超えています。内容を修正してください。",
+            "一部の���ラットフォームで文字数制限を超えています。内容を修正してください。",
           variant: "destructive",
         });
         return;
@@ -865,6 +885,9 @@ const PostForm: React.FC<PostFormProps> = ({
       });
 
       if (allNewFilesToUpload.length > 0) {
+        // Dropbox URLカラムを追加（初回のみ）
+        await addDropboxColumnToImageSheet();
+
         for (const file of allNewFilesToUpload) {
           addLogEntry("DEBUG", "Attempting to upload file", {
             fileName: file.name,
@@ -877,6 +900,31 @@ const PostForm: React.FC<PostFormProps> = ({
               fileName: file.name,
               imageId: uploadResult.imageId,
             });
+
+            // Instagramが選択されている場合はDropboxにもアップロード
+            if (selectedPlatforms.includes("instagram")) {
+              try {
+                const dropboxResult = await uploadImageToDropbox(file, uploadResult.imageId);
+                if (dropboxResult.success) {
+                  // Google SheetsのDropbox URLカラムを更新
+                  await updateImageDropboxUrl(uploadResult.imageId, dropboxResult.directUrl);
+                  addLogEntry("INFO", "Image also uploaded to Dropbox for Instagram", {
+                    imageId: uploadResult.imageId,
+                    dropboxUrl: dropboxResult.directUrl,
+                  });
+                } else {
+                  addLogEntry("WARN", "Failed to upload to Dropbox", {
+                    imageId: uploadResult.imageId,
+                    error: dropboxResult.message,
+                  });
+                }
+              } catch (dropboxError) {
+                addLogEntry("ERROR", "Dropbox upload error", {
+                  imageId: uploadResult.imageId,
+                  error: dropboxError,
+                });
+              }
+            }
           }
         }
       } else {
@@ -1149,6 +1197,7 @@ const PostForm: React.FC<PostFormProps> = ({
                 <PlatformSelector
                   selectedPlatforms={selectedPlatforms}
                   onChange={setSelectedPlatforms}
+                  dropboxConnected={dropboxConnected}
                 />
               )}
             </div>

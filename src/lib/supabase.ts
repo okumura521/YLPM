@@ -117,6 +117,10 @@ export const saveUserSettings = async (settings: {
   googleDriveFolderId?: string;
   googleDriveFolderName?: string;
   googleDriveFolderUrl?: string;
+  dropboxAccessToken?: string;
+  dropboxRefreshToken?: string;
+  dropboxFolderName?: string;
+  dropboxConnected?: boolean;
 }) => {
   const {
     data: { user },
@@ -148,6 +152,14 @@ export const saveUserSettings = async (settings: {
       updateData.google_drive_folder_name = settings.googleDriveFolderName;
     if (settings.googleDriveFolderUrl !== undefined)
       updateData.google_drive_folder_url = settings.googleDriveFolderUrl;
+    if (settings.dropboxAccessToken !== undefined)
+      updateData.dropbox_access_token = settings.dropboxAccessToken;
+    if (settings.dropboxRefreshToken !== undefined)
+      updateData.dropbox_refresh_token = settings.dropboxRefreshToken;
+    if (settings.dropboxFolderName !== undefined)
+      updateData.dropbox_folder_name = settings.dropboxFolderName;
+    if (settings.dropboxConnected !== undefined)
+      updateData.dropbox_connected = settings.dropboxConnected;
 
     const result = await supabase
       .from("user_settings")
@@ -169,6 +181,10 @@ export const saveUserSettings = async (settings: {
         google_drive_folder_id: settings.googleDriveFolderId,
         google_drive_folder_name: settings.googleDriveFolderName,
         google_drive_folder_url: settings.googleDriveFolderUrl,
+        dropbox_access_token: settings.dropboxAccessToken,
+        dropbox_refresh_token: settings.dropboxRefreshToken,
+        dropbox_folder_name: settings.dropboxFolderName,
+        dropbox_connected: settings.dropboxConnected,
       })
       .select()
       .single();
@@ -1216,6 +1232,396 @@ export const addLogEntry = (type: string, message: string, data?: any) => {
 // Clear logs
 export const clearLogs = () => {
   localStorage.removeItem("ylpm_logs");
+};
+
+// ===== Dropbox連携機能 =====
+
+// Dropbox OAuth認証を開始
+export const initiateDropboxAuth = async (folderName: string) => {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("User not authenticated");
+    }
+
+    // State parameter with user info
+    const state = encodeURIComponent(
+      JSON.stringify({
+        user_id: user.id,
+        folder_name: folderName,
+      }),
+    );
+
+    // Dropbox OAuth URL
+    const dropboxAuthUrl = `https://www.dropbox.com/oauth2/authorize?` +
+      `client_id=${import.meta.env.VITE_DROPBOX_APP_KEY}&` +
+      `response_type=code&` +
+      `redirect_uri=${encodeURIComponent(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dropbox-oauth-callback`)}&` +
+      `state=${state}`;
+
+    addLogEntry("INFO", "Initiating Dropbox OAuth", {
+      folderName,
+      userId: user.id,
+    });
+
+    // Open popup window for OAuth
+    const popup = window.open(
+      dropboxAuthUrl,
+      "dropbox-auth",
+      "width=600,height=700,scrollbars=yes,resizable=yes",
+    );
+
+    return new Promise((resolve, reject) => {
+      const checkClosed = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(checkClosed);
+          reject(new Error("認証がキャンセルされました"));
+        }
+      }, 1000);
+
+      // Listen for success message
+      const messageHandler = (event: MessageEvent) => {
+        if (event.data?.type === "DROPBOX_AUTH_SUCCESS") {
+          clearInterval(checkClosed);
+          window.removeEventListener("message", messageHandler);
+          popup?.close();
+          resolve({ success: true });
+        }
+      };
+
+      window.addEventListener("message", messageHandler);
+
+      // Timeout after 5 minutes
+      setTimeout(() => {
+        clearInterval(checkClosed);
+        window.removeEventListener("message", messageHandler);
+        popup?.close();
+        reject(new Error("認証がタイムアウトしました"));
+      }, 5 * 60 * 1000);
+    });
+  } catch (error) {
+    console.error("Error initiating Dropbox auth:", error);
+    addLogEntry("ERROR", "Error initiating Dropbox auth", error);
+    throw error;
+  }
+};
+
+// Dropbox接続状態を確認
+export const checkDropboxConnection = async () => {
+  try {
+    const settings = await getUserSettings();
+    return {
+      connected: !!settings?.dropbox_connected,
+      folderName: settings?.dropbox_folder_name || "",
+    };
+  } catch (error) {
+    console.error("Error checking Dropbox connection:", error);
+    addLogEntry("ERROR", "Error checking Dropbox connection", error);
+    return { connected: false, folderName: "" };
+  }
+};
+
+// Dropbox設定を保存
+export const saveDropboxSettings = async (settings: {
+  dropboxAccessToken?: string;
+  dropboxRefreshToken?: string;
+  dropboxFolderName?: string;
+  dropboxConnected?: boolean;
+}) => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("User not authenticated");
+  }
+
+  // First check if user settings already exist
+  const { data: existingSettings } = await supabase
+    .from("user_settings")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  let data, error;
+
+  if (existingSettings) {
+    // Update existing record
+    const updateData: any = {};
+    if (settings.dropboxAccessToken !== undefined)
+      updateData.dropbox_access_token = settings.dropboxAccessToken;
+    if (settings.dropboxRefreshToken !== undefined)
+      updateData.dropbox_refresh_token = settings.dropboxRefreshToken;
+    if (settings.dropboxFolderName !== undefined)
+      updateData.dropbox_folder_name = settings.dropboxFolderName;
+    if (settings.dropboxConnected !== undefined)
+      updateData.dropbox_connected = settings.dropboxConnected;
+
+    const result = await supabase
+      .from("user_settings")
+      .update(updateData)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    data = result.data;
+    error = result.error;
+  } else {
+    // Insert new record
+    const result = await supabase
+      .from("user_settings")
+      .insert({
+        user_id: user.id,
+        dropbox_access_token: settings.dropboxAccessToken,
+        dropbox_refresh_token: settings.dropboxRefreshToken,
+        dropbox_folder_name: settings.dropboxFolderName,
+        dropbox_connected: settings.dropboxConnected,
+      })
+      .select()
+      .single();
+
+    data = result.data;
+    error = result.error;
+  }
+
+  if (error) {
+    addLogEntry("ERROR", "Error saving Dropbox settings", error);
+    throw error;
+  }
+
+  // Clear cache when settings are updated
+  clearUserSettingsCache();
+
+  addLogEntry("INFO", "Dropbox settings saved successfully", data);
+  return data;
+};
+
+// Dropboxに画像をアップロード
+export const uploadImageToDropbox = async (file: File, imageId: string) => {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("User not authenticated");
+    }
+
+    const settings = await getUserSettings();
+    if (!settings?.dropbox_connected) {
+      throw new Error("Dropbox not connected");
+    }
+
+    // Convert file to base64
+    const reader = new FileReader();
+    const fileData = await new Promise<string>((resolve, reject) => {
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove data URL prefix
+        const base64Data = result.split(',')[1];
+        resolve(base64Data);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const fileName = `${timestamp}_${file.name}`;
+
+    // Call Supabase Edge Function for upload
+    const { data, error } = await supabase.functions.invoke(
+      'supabase-functions-dropbox-upload',
+      {
+        body: {
+          user_id: user.id,
+          file_data: fileData,
+          file_name: fileName,
+          folder_name: settings.dropbox_folder_name || 'YLPM Images',
+        },
+      }
+    );
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data.success) {
+      throw new Error(data.error || 'Upload failed');
+    }
+
+    addLogEntry("INFO", "Image uploaded to Dropbox successfully", {
+      imageId,
+      fileName: data.file_name,
+      fileUrl: data.file_url,
+    });
+
+    return {
+      success: true,
+      fileId: data.file_id,
+      fileName: data.file_name,
+      fileUrl: data.file_url,
+      directUrl: data.direct_url,
+      path: data.path,
+    };
+  } catch (error) {
+    console.error("Error uploading image to Dropbox:", error);
+    addLogEntry("ERROR", "Error uploading image to Dropbox", error);
+    return {
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to upload image to Dropbox",
+    };
+  }
+};
+
+// 画像アップロードリストシートにDropbox URLカラムを追加
+export const addDropboxColumnToImageSheet = async () => {
+  try {
+    const settings = await getUserSettings();
+    if (!settings?.google_sheet_id) {
+      throw new Error("Google Sheet not configured");
+    }
+
+    const accessToken = await getGoogleAccessToken();
+    const sheetId = settings.google_sheet_id;
+
+    // 画像アップロードリストシートを初期化
+    await initializeImageUploadListSheet();
+
+    // 現在のヘッダーを取得
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/画像アップロードリスト!1:1`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch current headers");
+    }
+
+    const data = await response.json();
+    const currentHeaders = data.values?.[0] || [];
+
+    // Dropbox URLカラムが既に存在するかチェック
+    if (!currentHeaders.includes("Dropbox画像URL")) {
+      // D列にDropbox URLカラムを追加
+      const newHeaders = [...currentHeaders];
+      if (newHeaders.length >= 4) {
+        newHeaders.splice(4, 0, "Dropbox画像URL"); // D列の後に挿入
+      } else {
+        newHeaders.push("Dropbox画像URL");
+      }
+
+      const updateResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/画像アップロードリスト!1:1?valueInputOption=RAW`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            values: [newHeaders],
+          }),
+        },
+      );
+
+      if (!updateResponse.ok) {
+        throw new Error("Failed to add Dropbox URL column");
+      }
+
+      addLogEntry("INFO", "Dropbox URL column added to image sheet");
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error adding Dropbox column to image sheet:", error);
+    addLogEntry("ERROR", "Error adding Dropbox column to image sheet", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+// 画像IDに対してDropbox URLを更新
+export const updateImageDropboxUrl = async (imageId: string, dropboxUrl: string) => {
+  try {
+    const settings = await getUserSettings();
+    if (!settings?.google_sheet_id) {
+      throw new Error("Google Sheet not configured");
+    }
+
+    const accessToken = await getGoogleAccessToken();
+    const sheetId = settings.google_sheet_id;
+
+    // 画像アップロードリストから該当する画像IDの行を検索
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/画像アップロードリスト!A:E`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch image upload list");
+    }
+
+    const data = await response.json();
+    const rows = data.values || [];
+
+    // ヘッダーをスキップして画像IDで検索
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row[0] === imageId) {
+        // 該当行のE列（Dropbox URL）を更新
+        const rowIndex = i + 1;
+        const updateResponse = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/画像アップロードリスト!E${rowIndex}?valueInputOption=RAW`,
+          {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              values: [[dropboxUrl]],
+            }),
+          },
+        );
+
+        if (!updateResponse.ok) {
+          throw new Error("Failed to update Dropbox URL");
+        }
+
+        addLogEntry("INFO", "Dropbox URL updated for image", {
+          imageId,
+          dropboxUrl,
+        });
+        return { success: true };
+      }
+    }
+
+    throw new Error("Image ID not found");
+  } catch (error) {
+    console.error("Error updating image Dropbox URL:", error);
+    addLogEntry("ERROR", "Error updating image Dropbox URL", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
 };
 
 // ===== AI設定管理機能（Google Sheets） =====

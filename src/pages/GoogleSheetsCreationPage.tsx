@@ -17,11 +17,14 @@ import {
   createGoogleSheetWithOAuth,
   openGoogleDrivePicker,
   createGoogleDriveImageFolder,
+  checkDropboxConnection,
 } from "@/lib/supabase";
+import DropboxConnectionForm from "@/components/DropboxConnectionForm";
 
 export default function GoogleSheetsCreationPage() {
   const [loading, setLoading] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
+  const [dropboxConnected, setDropboxConnected] = useState(false);
   const [directoryId, setDirectoryId] = useState("");
   const [createdSheetUrl, setCreatedSheetUrl] = useState("");
   const [settings, setSettings] = useState<any>(null);
@@ -29,24 +32,36 @@ export default function GoogleSheetsCreationPage() {
 
   // Check Google connection status
   useEffect(() => {
-    const checkGoogleConnection = async () => {
+    const checkConnections = async () => {
       try {
         const userSettings = await getUserSettings();
         setSettings(userSettings);
-        // Check if user has Google OAuth token
+        
+        // Check Google connection
         try {
           await getGoogleAccessToken();
           setGoogleConnected(true);
         } catch (error) {
           setGoogleConnected(false);
         }
+
+        // Check Dropbox connection
+        const dropboxStatus = await checkDropboxConnection();
+        setDropboxConnected(dropboxStatus.connected);
       } catch (error) {
-        console.error("Failed to check Google connection:", error);
+        console.error("Failed to check connections:", error);
         setGoogleConnected(false);
+        setDropboxConnected(false);
       }
     };
-    checkGoogleConnection();
+    checkConnections();
   }, []);
+
+  const handleDropboxConnectionSuccess = () => {
+    setDropboxConnected(true);
+    // Refresh settings
+    getUserSettings().then(setSettings);
+  };
 
   const handleCreateSheet = async () => {
     if (!googleConnected) {
@@ -151,7 +166,7 @@ export default function GoogleSheetsCreationPage() {
   const handleChangeFolder = async () => {
     toast({
       title: "機能準備中",
-      description: "フォルダ変更機能は準備中です",
+      description: "フォルダ変更機能は準���中です",
     });
   };
 
@@ -264,6 +279,51 @@ export default function GoogleSheetsCreationPage() {
                 <p className="text-sm text-muted-foreground">
                   Googleアカウントでログインしてください。
                 </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Dropbox Connection Status */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Dropbox連携ステータス
+              {dropboxConnected ? (
+                <CheckCircle className="h-5 w-5 text-green-500" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-500" />
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {dropboxConnected ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-green-600">
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Dropbox連携が完了しています</span>
+                </div>
+                {settings?.dropbox_folder_name && (
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-sm font-medium text-green-800 mb-2">
+                      保存フォルダ名:
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      {settings.dropbox_folder_name}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-red-600">
+                  <XCircle className="h-4 w-4" />
+                  <span>Dropbox連携が完了していません</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Instagram投稿にはDropbox連携が必要です。
+                </p>
+                <DropboxConnectionForm onConnectionSuccess={handleDropboxConnectionSuccess} />
               </div>
             )}
           </CardContent>

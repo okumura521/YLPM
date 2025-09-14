@@ -17,6 +17,10 @@ export type Database = {
       user_settings: {
         Row: {
           created_at: string | null
+          dropbox_access_token: string | null
+          dropbox_connected: boolean | null
+          dropbox_folder_name: string | null
+          dropbox_refresh_token: string | null
           google_drive_folder_id: string | null
           google_drive_folder_name: string | null
           google_drive_folder_url: string | null
@@ -28,6 +32,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          dropbox_access_token?: string | null
+          dropbox_connected?: boolean | null
+          dropbox_folder_name?: string | null
+          dropbox_refresh_token?: string | null
           google_drive_folder_id?: string | null
           google_drive_folder_name?: string | null
           google_drive_folder_url?: string | null
@@ -39,6 +47,10 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          dropbox_access_token?: string | null
+          dropbox_connected?: boolean | null
+          dropbox_folder_name?: string | null
+          dropbox_refresh_token?: string | null
           google_drive_folder_id?: string | null
           google_drive_folder_name?: string | null
           google_drive_folder_url?: string | null
