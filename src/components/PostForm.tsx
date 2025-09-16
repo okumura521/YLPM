@@ -42,6 +42,10 @@ import {
   uploadImageAndGenerateId, // 追加
   getImagesInfoByIds, // 追加
   getSelectedAISettings, // 追加
+  checkDropboxConnection, // 追加
+  uploadImageToDropbox, // 追加
+  updateImageDropboxUrl, // 追加
+  addDropboxColumnToImageSheet, // 追加
 } from "@/lib/supabase";
 import { callAI, buildPrompt } from "@/lib/aiProviders";
 import { useToast } from "@/components/ui/use-toast";
@@ -83,6 +87,68 @@ interface ImagePreviewData {
   previewUrl: string;
   originalFile?: File; // Only for new images
 }
+
+/**
+ * Instagram用に画像のアスペクト比を中央から1:1の正方形に調整する
+ * @param file - 処理する画像ファイル
+ * @returns - 処理後の画像ファイルを含むPromise
+ */
+const adjustImageForInstagram = (file: File): Promise<File> => {
+  console.log('[adjustImage] Processing started for:', file.name);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.onload = () => {
+        console.log(`[adjustImage] Image loaded: ${img.width}x${img.height}`);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return reject(new Error('Failed to get canvas context'));
+        }
+
+        const { width, height } = img;
+        const size = Math.min(width, height);
+        
+        canvas.width = size;
+        canvas.height = size;
+
+        const startX = (width > size) ? (width - size) / 2 : 0;
+        const startY = (height > size) ? (height - size) / 2 : 0;
+        
+        console.log(`[adjustImage] Cropping to ${size}x${size} from (${startX}, ${startY})`);
+
+        ctx.drawImage(img, startX, startY, size, size, 0, 0, size, size);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            return reject(new Error('Canvas toBlob failed'));
+          }
+          const newFile = new File([blob], file.name, {
+            type: file.type || 'image/png',
+            lastModified: Date.now(),
+          });
+          console.log('[adjustImage] New file created:', { name: newFile.name, size: newFile.size, type: newFile.type });
+          resolve(newFile);
+        }, file.type || 'image/png', 0.9); // added quality parameter for potential size reduction
+      };
+      img.onerror = (err) => {
+        console.error('[adjustImage] Image load error:', err);
+        reject(err);
+      };
+      if (event.target?.result) {
+        img.src = event.target.result as string;
+      } else {
+        reject(new Error("FileReader result is null"));
+      }
+    };
+    reader.onerror = (err) => {
+        console.error('[adjustImage] FileReader error:', err);
+        reject(err);
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 const PostForm: React.FC<PostFormProps> = ({
   initialData,
@@ -131,6 +197,7 @@ const PostForm: React.FC<PostFormProps> = ({
   const [loadingAiSettings, setLoadingAiSettings] = useState<boolean>(true);
   const [imageLoadError, setImageLoadError] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [dropboxConnected, setDropboxConnected] = useState<boolean>(false);
 
   const {
     register,
@@ -543,7 +610,22 @@ const PostForm: React.FC<PostFormProps> = ({
       }
     };
 
+    const loadDropboxConnection = async () => {
+      try {
+        const dropboxStatus = await checkDropboxConnection();
+        if (isMounted) {
+          setDropboxConnected(dropboxStatus.connected);
+        }
+      } catch (error) {
+        if (isMounted) {
+          addLogEntry("ERROR", "Failed to check Dropbox connection", error);
+          setDropboxConnected(false);
+        }
+      }
+    };
+
     loadAiSettings();
+    loadDropboxConnection();
 
     return () => {
       isMounted = false;
@@ -865,6 +947,9 @@ const PostForm: React.FC<PostFormProps> = ({
       });
 
       if (allNewFilesToUpload.length > 0) {
+        // Dropbox URLカラムを追加（初回のみ）
+        await addDropboxColumnToImageSheet();
+
         for (const file of allNewFilesToUpload) {
           addLogEntry("DEBUG", "Attempting to upload file", {
             fileName: file.name,
@@ -877,6 +962,35 @@ const PostForm: React.FC<PostFormProps> = ({
               fileName: file.name,
               imageId: uploadResult.imageId,
             });
+
+            // Instagramが選択されている場合はDropboxにもアップロード
+            if (selectedPlatforms.includes("instagram")) {
+              try {
+                addLogEntry("INFO", "Adjusting image for Instagram", { originalFile: { name: file.name, size: file.size, type: file.type } });
+                const instagramImage = await adjustImageForInstagram(file);
+                addLogEntry("INFO", "Image adjusted for Instagram", { adjustedFile: { name: instagramImage.name, size: instagramImage.size, type: instagramImage.type } });
+                
+                const dropboxResult = await uploadImageToDropbox(instagramImage, uploadResult.imageId);
+                if (dropboxResult.success) {
+                  // Google SheetsのDropbox URLカラムを更新
+                  await updateImageDropboxUrl(uploadResult.imageId, dropboxResult.directUrl);
+                  addLogEntry("INFO", "Image also uploaded to Dropbox for Instagram", {
+                    imageId: uploadResult.imageId,
+                    dropboxUrl: dropboxResult.directUrl,
+                  });
+                } else {
+                  addLogEntry("WARN", "Failed to upload to Dropbox", {
+                    imageId: uploadResult.imageId,
+                    error: dropboxResult.message,
+                  });
+                }
+              } catch (dropboxError) {
+                addLogEntry("ERROR", "Dropbox upload error including image processing", {
+                  imageId: uploadResult.imageId,
+                  error: dropboxError instanceof Error ? { message: dropboxError.message, stack: dropboxError.stack } : dropboxError,
+                });
+              }
+            }
           }
         }
       } else {
@@ -1149,6 +1263,7 @@ const PostForm: React.FC<PostFormProps> = ({
                 <PlatformSelector
                   selectedPlatforms={selectedPlatforms}
                   onChange={setSelectedPlatforms}
+                  dropboxConnected={dropboxConnected}
                 />
               )}
             </div>
