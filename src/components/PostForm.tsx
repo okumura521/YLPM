@@ -88,6 +88,68 @@ interface ImagePreviewData {
   originalFile?: File; // Only for new images
 }
 
+/**
+ * Instagram用に画像のアスペクト比を中央から1:1の正方形に調整する
+ * @param file - 処理する画像ファイル
+ * @returns - 処理後の画像ファイルを含むPromise
+ */
+const adjustImageForInstagram = (file: File): Promise<File> => {
+  console.log('[adjustImage] Processing started for:', file.name);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.onload = () => {
+        console.log(`[adjustImage] Image loaded: ${img.width}x${img.height}`);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return reject(new Error('Failed to get canvas context'));
+        }
+
+        const { width, height } = img;
+        const size = Math.min(width, height);
+        
+        canvas.width = size;
+        canvas.height = size;
+
+        const startX = (width > size) ? (width - size) / 2 : 0;
+        const startY = (height > size) ? (height - size) / 2 : 0;
+        
+        console.log(`[adjustImage] Cropping to ${size}x${size} from (${startX}, ${startY})`);
+
+        ctx.drawImage(img, startX, startY, size, size, 0, 0, size, size);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            return reject(new Error('Canvas toBlob failed'));
+          }
+          const newFile = new File([blob], file.name, {
+            type: file.type || 'image/png',
+            lastModified: Date.now(),
+          });
+          console.log('[adjustImage] New file created:', { name: newFile.name, size: newFile.size, type: newFile.type });
+          resolve(newFile);
+        }, file.type || 'image/png', 0.9); // added quality parameter for potential size reduction
+      };
+      img.onerror = (err) => {
+        console.error('[adjustImage] Image load error:', err);
+        reject(err);
+      };
+      if (event.target?.result) {
+        img.src = event.target.result as string;
+      } else {
+        reject(new Error("FileReader result is null"));
+      }
+    };
+    reader.onerror = (err) => {
+        console.error('[adjustImage] FileReader error:', err);
+        reject(err);
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 const PostForm: React.FC<PostFormProps> = ({
   initialData,
   post,
@@ -231,7 +293,7 @@ const PostForm: React.FC<PostFormProps> = ({
           setSelectedPlatforms(availablePlatforms);
           setIsScheduled(primaryPost.isScheduled || false);
 
-          // プラットフォーム別の投稿内容を設���
+          // プラットフォーム別の投稿内容を設定
           const newPlatformContent: Record<string, string> = {};
           // const newPlatformImages: Record<string, File[]> = {}; // 型を修正
           const newPlatformSchedules: Record<
@@ -786,7 +848,7 @@ const PostForm: React.FC<PostFormProps> = ({
       let errorMessage = "コンテンツの生成に失敗しました";
       if (error instanceof Error) {
         if (error.message.includes("APIキー")) {
-          errorMessage = "APIキーが無��です。設定を確認してください。";
+          errorMessage = "APIキーが無効です。設定を確認してください。";
         } else if (error.message.includes("レート制限")) {
           errorMessage =
             "レート制限に達しました。しばらく待ってから再試行してください。";
@@ -817,7 +879,7 @@ const PostForm: React.FC<PostFormProps> = ({
         toast({
           title: "文字数制限エラー",
           description:
-            "一部の���ラットフォームで文字数制限を超えています。内容を修正してください。",
+            "一部のプラットフォームで文字数制限を超えています。内容を修正してください。",
           variant: "destructive",
         });
         return;
@@ -904,7 +966,11 @@ const PostForm: React.FC<PostFormProps> = ({
             // Instagramが選択されている場合はDropboxにもアップロード
             if (selectedPlatforms.includes("instagram")) {
               try {
-                const dropboxResult = await uploadImageToDropbox(file, uploadResult.imageId);
+                addLogEntry("INFO", "Adjusting image for Instagram", { originalFile: { name: file.name, size: file.size, type: file.type } });
+                const instagramImage = await adjustImageForInstagram(file);
+                addLogEntry("INFO", "Image adjusted for Instagram", { adjustedFile: { name: instagramImage.name, size: instagramImage.size, type: instagramImage.type } });
+                
+                const dropboxResult = await uploadImageToDropbox(instagramImage, uploadResult.imageId);
                 if (dropboxResult.success) {
                   // Google SheetsのDropbox URLカラムを更新
                   await updateImageDropboxUrl(uploadResult.imageId, dropboxResult.directUrl);
@@ -919,9 +985,9 @@ const PostForm: React.FC<PostFormProps> = ({
                   });
                 }
               } catch (dropboxError) {
-                addLogEntry("ERROR", "Dropbox upload error", {
+                addLogEntry("ERROR", "Dropbox upload error including image processing", {
                   imageId: uploadResult.imageId,
-                  error: dropboxError,
+                  error: dropboxError instanceof Error ? { message: dropboxError.message, stack: dropboxError.stack } : dropboxError,
                 });
               }
             }

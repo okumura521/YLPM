@@ -67,7 +67,7 @@ export default function DashboardPage() {
               <div>
                 <h1 className="text-xl font-semibold">
                   Yell-lab-PostMate{" "}
-                  <span className="text-sm text-muted-foreground">Ver.0</span>
+                  <span className="text-sm text-muted-foreground">Ver.0.2</span>
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   SNS投稿管理システム
@@ -120,13 +120,13 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileSpreadsheet className="h-5 w-5" />
-                Google Sheets 作成・管理
+                Google Sheets,Dropbox Folder 作成・管理
               </CardTitle>
               <CardDescription>投稿管理シートの作成・管理</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                SNS投稿管理用のGoogle Sheetを新規作成します。
+                SNS投稿管理用のGoogle Sheet,Dropbox Folderを新規作成します。
               </p>
             </CardContent>
           </Card>
@@ -160,8 +160,9 @@ export default function DashboardPage() {
             <CardContent>
               <p className="text-muted-foreground">
                 SNS投稿管理システムへようこそ。まずはGoogle Sheet・Google Drive
-                Folderの作成から初めてください。AI設定は、ユーザ設定ページで行います。（AI設定は任意です。）
-                設定完了後、投稿管理を開始できます。
+                Folderの作成から初めてください。<br />
+                AI設定は、ユーザ設定ページで行います。<br />
+                Instagramへ投稿する場合はDropbox Folderの作成が必要です。<br />
               </p>
 
               {/* YLPM Support Status */}
@@ -173,14 +174,14 @@ export default function DashboardPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between p-2 bg-white rounded border">
                       <span className="font-medium">X (Twitter)</span>
-                      <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                        make側の送信処理開発中
+                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
+                        利用可能
                       </span>
                     </div>
                     <div className="flex items-center justify-between p-2 bg-white rounded border">
                       <span className="font-medium">Instagram</span>
-                      <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                        make側の送信処理開発中
+                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
+                        利用可能
                       </span>
                     </div>
                     <div className="flex items-center justify-between p-2 bg-white rounded border">
@@ -242,24 +243,10 @@ export default function DashboardPage() {
               <div className="mt-6">
                 <h3 className="text-lg font-semibold mb-4">更新履歴</h3>
                 <div className="space-y-4">
-                  <div className="border-l-4 border-blue-500 pl-4">
+              {/* この下に更新履歴を追加してください */}
+                <div className="border-l-4 border-blue-500 pl-4">
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold">更新</h4>
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                        Ver.0.1
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      2025年8月
-                    </p>
-                    <ul className="text-sm space-y-1">
-                      <li>• 画像UPload機能修正</li>
-                      <li>• 新規登録・編集ページ修正</li>
-                    </ul>
-                  </div>
-                  <div className="border-l-4 border-blue-500 pl-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold">初版リリース</h4>
+                      <h4 className="font-semibold">開発中</h4>
                       <span className="text-xs bg-gray-100 px-2 py-1 rounded">
                         Ver.0
                       </span>
@@ -275,7 +262,56 @@ export default function DashboardPage() {
                       <li>• スケジュール投稿機能</li>
                     </ul>
                   </div>
-                  {/* 更新履歴は手動で更新されます。新しいバージョンの情報をここにコピー＆ペーストしてください。 */}
+                <div className="border-l-4 border-blue-500 pl-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold">開発中</h4>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        Ver.0.2
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      2025年8月
+                    </p>
+                    <ul className="text-sm space-y-1">
+                      <li>• AI複数サービス登録機能追加</li>
+                      <li>• インスタグラム投稿画像用Dropbox Folder連携機能追加</li>
+                    </ul>
+                  </div>
+                  <div className="border-l-4 border-blue-500 pl-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold">開発中</h4>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        Ver.0.1
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      2025年8月
+                    </p>
+                    <ul className="text-sm space-y-1">
+                      <li>• 画像UPload機能修正</li>
+                      <li>• 新規登録・編集ページ修正</li>
+                    </ul>
+                  </div>
+                     {/* 更新履歴フォーマット*/}
+                  <div className="border-l-4 border-blue-500 pl-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold">開発中</h4>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        Ver.0
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      2025年8月
+                    </p>
+                    <ul className="text-sm space-y-1">
+                      <li>• SNS投稿作成・管理機能</li>
+                      <li>• Google Sheets連携</li>
+                      <li>• AI生成機能</li>
+                      <li>• 複数プラットフォーム対応</li>
+                      <li>• スケジュール投稿機能</li>
+                    </ul>
+                  </div>
+                  {/* 更新履歴ここまで */}
                 </div>
               </div>
             </CardContent>

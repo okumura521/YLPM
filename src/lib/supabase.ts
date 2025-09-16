@@ -453,10 +453,8 @@ export const createGoogleSheetWithOAuth = async (
                         { userEnteredValue: { stringValue: "予定時刻" } },
                         { userEnteredValue: { stringValue: "ステータス" } },
                         { userEnteredValue: { stringValue: "画像ID" } },
-                        {
-                          userEnteredValue: { stringValue: "Reserved" },
-                        },
-                        { userEnteredValue: { stringValue: "Reserved" } },
+                        { userEnteredValue: { stringValue: "予備" } },
+                        { userEnteredValue: { stringValue: "予備" } },
                         { userEnteredValue: { stringValue: "削除フラグ" } },
                         { userEnteredValue: { stringValue: "作成日時" } },
                         { userEnteredValue: { stringValue: "更新日時" } },
@@ -477,10 +475,9 @@ export const createGoogleSheetWithOAuth = async (
                       values: [
                         { userEnteredValue: { stringValue: "画像ID" } },
                         { userEnteredValue: { stringValue: "ファイル名" } },
-                        { userEnteredValue: { stringValue: "画像URL" } },
-                        {
-                          userEnteredValue: { stringValue: "アップロード日時" },
-                        },
+                        { userEnteredValue: { stringValue: "Googledrive画像URL" } },
+                        { userEnteredValue: { stringValue: "アップロード日時" },},
+                        { userEnteredValue: { stringValue: "Dropbox画像URL" } },
                       ],
                     },
                   ],
@@ -1259,6 +1256,7 @@ export const initiateDropboxAuth = async (folderName: string) => {
     const dropboxAuthUrl = `https://www.dropbox.com/oauth2/authorize?` +
       `client_id=${import.meta.env.VITE_DROPBOX_APP_KEY}&` +
       `response_type=code&` +
+      `token_access_type=offline&` + // refresh_tokenを取得するためにこの行を追加
       `redirect_uri=${encodeURIComponent(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dropbox-oauth-callback`)}&` +
       `state=${state}`;
 
