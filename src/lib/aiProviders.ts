@@ -38,8 +38,7 @@ export const callOpenAI = async (
             content: prompt,
           },
         ],
-        temperature: 0.7,
-        max_tokens: 2000,
+        max_completion_tokens: 2000,
       }),
     });
 
@@ -116,9 +115,10 @@ export const callAnthropic = async (
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "x-api-key": apiToken,
         "Content-Type": "application/json",
+        "x-api-key": apiToken,
         "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true" 
       },
       body: JSON.stringify({
         model: model,
