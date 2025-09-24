@@ -209,13 +209,42 @@ export default function UserSettingsPage() {
 
     try {
       setLoading(true);
+      setAiTesting(true);
 
-      // Test connection first
-      const testResult = await testAIConnection(
-        editingService.ai_service,
-        editAiModel,
-        editAiApiToken,
-      );
+      // Show testing toast
+      toast({
+        title: "接続テスト中",
+        description: `${editingService.ai_service} APIへの接続をテストしています...`,
+      });
+
+      // Test connection first with timeout
+      const testResult = await Promise.race([
+        testAIConnection(
+          editingService.ai_service,
+          editAiModel,
+          editAiApiToken,
+        ),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("接続テストがタイムアウトしました")),
+            30000,
+          ),
+        ),
+      ]);
+
+      // Show test result
+      if (testResult.success) {
+        toast({
+          title: "接続テスト成功",
+          description: `${editingService.ai_service} APIへの接続が確認されました`,
+        });
+      } else {
+        toast({
+          title: "接続テスト失敗",
+          description: testResult.message || "API接続に失敗しました",
+          variant: "destructive",
+        });
+      }
 
       const result = await saveAISettings({
         ...editingService,
@@ -236,13 +265,16 @@ export default function UserSettingsPage() {
         throw new Error(result.error);
       }
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "AI設定の更新に失敗しました";
       toast({
         title: "設定更新エラー",
-        description: "AI設定の更新に失敗しました",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setLoading(false);
+      setAiTesting(false);
     }
   };
 
@@ -269,13 +301,38 @@ export default function UserSettingsPage() {
 
     try {
       setLoading(true);
+      setAiTesting(true);
 
-      // Test connection first
-      const testResult = await testAIConnection(
-        newAiService,
-        newAiModel,
-        newAiApiToken,
-      );
+      // Show testing toast
+      toast({
+        title: "接続テスト中",
+        description: `${newAiService} APIへの接続をテストしています...`,
+      });
+
+      // Test connection first with timeout
+      const testResult = await Promise.race([
+        testAIConnection(newAiService, newAiModel, newAiApiToken),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("接続テストがタイムアウトしました")),
+            30000,
+          ),
+        ),
+      ]);
+
+      // Show test result
+      if (testResult.success) {
+        toast({
+          title: "接続テスト成功",
+          description: `${newAiService} APIへの接続が確認されました`,
+        });
+      } else {
+        toast({
+          title: "接続テスト失敗",
+          description: testResult.message || "API接続に失敗しました",
+          variant: "destructive",
+        });
+      }
 
       const result = await saveAISettings({
         ai_service: newAiService,
@@ -299,13 +356,16 @@ export default function UserSettingsPage() {
         throw new Error(result.error);
       }
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "AI設定の追加に失敗しました";
       toast({
         title: "設定追加エラー",
-        description: "AI設定の追加に失敗しました",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setLoading(false);
+      setAiTesting(false);
     }
   };
 
@@ -401,7 +461,7 @@ export default function UserSettingsPage() {
                           <span className="text-sm text-muted-foreground">
                             {setting.ai_connection_status
                               ? "接続確認済み"
-                              : "未確認"}
+                              : "接続未確認"}
                           </span>
                         </div>
                       </div>
@@ -478,9 +538,11 @@ export default function UserSettingsPage() {
               >
                 キャンセル
               </Button>
-              <Button onClick={handleEditSave} disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                保存
+              <Button onClick={handleEditSave} disabled={loading || aiTesting}>
+                {(loading || aiTesting) && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {aiTesting ? "接続テスト中..." : "保存"}
               </Button>
             </div>
           </div>
@@ -550,9 +612,14 @@ export default function UserSettingsPage() {
               >
                 キャンセル
               </Button>
-              <Button onClick={handleAddService} disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                追加
+              <Button
+                onClick={handleAddService}
+                disabled={loading || aiTesting}
+              >
+                {(loading || aiTesting) && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {aiTesting ? "接続テスト中..." : "追加"}
               </Button>
             </div>
           </div>
