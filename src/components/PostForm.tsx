@@ -94,46 +94,56 @@ interface ImagePreviewData {
  * @returns - 処理後の画像ファイルを含むPromise
  */
 const adjustImageForInstagram = (file: File): Promise<File> => {
-  console.log('[adjustImage] Processing started for:', file.name);
+  console.log("[adjustImage] Processing started for:", file.name);
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new window.Image();
       img.onload = () => {
         console.log(`[adjustImage] Image loaded: ${img.width}x${img.height}`);
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
         if (!ctx) {
-          return reject(new Error('Failed to get canvas context'));
+          return reject(new Error("Failed to get canvas context"));
         }
 
         const { width, height } = img;
         const size = Math.min(width, height);
-        
+
         canvas.width = size;
         canvas.height = size;
 
-        const startX = (width > size) ? (width - size) / 2 : 0;
-        const startY = (height > size) ? (height - size) / 2 : 0;
-        
-        console.log(`[adjustImage] Cropping to ${size}x${size} from (${startX}, ${startY})`);
+        const startX = width > size ? (width - size) / 2 : 0;
+        const startY = height > size ? (height - size) / 2 : 0;
+
+        console.log(
+          `[adjustImage] Cropping to ${size}x${size} from (${startX}, ${startY})`,
+        );
 
         ctx.drawImage(img, startX, startY, size, size, 0, 0, size, size);
 
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            return reject(new Error('Canvas toBlob failed'));
-          }
-          const newFile = new File([blob], file.name, {
-            type: file.type || 'image/png',
-            lastModified: Date.now(),
-          });
-          console.log('[adjustImage] New file created:', { name: newFile.name, size: newFile.size, type: newFile.type });
-          resolve(newFile);
-        }, file.type || 'image/png', 0.9); // added quality parameter for potential size reduction
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              return reject(new Error("Canvas toBlob failed"));
+            }
+            const newFile = new File([blob], file.name, {
+              type: file.type || "image/png",
+              lastModified: Date.now(),
+            });
+            console.log("[adjustImage] New file created:", {
+              name: newFile.name,
+              size: newFile.size,
+              type: newFile.type,
+            });
+            resolve(newFile);
+          },
+          file.type || "image/png",
+          0.9,
+        ); // added quality parameter for potential size reduction
       };
       img.onerror = (err) => {
-        console.error('[adjustImage] Image load error:', err);
+        console.error("[adjustImage] Image load error:", err);
         reject(err);
       };
       if (event.target?.result) {
@@ -143,8 +153,8 @@ const adjustImageForInstagram = (file: File): Promise<File> => {
       }
     };
     reader.onerror = (err) => {
-        console.error('[adjustImage] FileReader error:', err);
-        reject(err);
+      console.error("[adjustImage] FileReader error:", err);
+      reject(err);
     };
     reader.readAsDataURL(file);
   });
@@ -218,7 +228,7 @@ const PostForm: React.FC<PostFormProps> = ({
   };
 
   // プラットフォーム別の文字数監視と検証
-  const validatePlatformContents = () => {
+  const validatePlatformContents = (checkEmpty = false) => {
     const errors: Record<string, string[]> = {};
 
     selectedPlatforms.forEach((platform) => {
@@ -229,7 +239,13 @@ const PostForm: React.FC<PostFormProps> = ({
       const platformContentValue = platformContent[platform] || "";
       const contentLength = platformContentValue.length;
 
-      if (contentLength > validation.maxLength) {
+      // 0文字（空）の場合のバリデーション（checkEmptyがtrueの時のみ）
+      if (checkEmpty && contentLength === 0) {
+        if (!errors[platform]) errors[platform] = [];
+        errors[platform].push(
+          `${validation.name}の投稿内容を入力してください。`,
+        );
+      } else if (contentLength > validation.maxLength) {
         if (!errors[platform]) errors[platform] = [];
         errors[platform].push(
           `${validation.name}の文字数制限（${validation.maxLength}文字）を超えています。現在${contentLength}文字です。`,
@@ -244,7 +260,7 @@ const PostForm: React.FC<PostFormProps> = ({
   // プラットフォーム別コンテンツが変更されたときに検証を実行
   React.useEffect(() => {
     if (selectedPlatforms.length > 0) {
-      validatePlatformContents();
+      validatePlatformContents(false);
     }
   }, [platformContent, selectedPlatforms]);
 
@@ -874,12 +890,13 @@ const PostForm: React.FC<PostFormProps> = ({
     setIsSubmitting(true);
 
     try {
-      // 下書き保存時は文字数検証をスキップ、確定・投稿時は検証を実行
-      if (!isDraft && !validatePlatformContents()) {
+      // 下書き保存時も投稿確定時も0文字チェックと文字数超過チェックを実行
+      if (!validatePlatformContents(true)) {
+        // 0文字チェックも実行
         toast({
-          title: "文字数制限エラー",
+          title: "入力エラー",
           description:
-            "一部のプラットフォームで文字数制限を超えています。内容を修正してください。",
+            "投稿内容が入力されていないプラットフォームがあるか、文字数制限を超えています。",
           variant: "destructive",
         });
         return;
@@ -966,18 +983,40 @@ const PostForm: React.FC<PostFormProps> = ({
             // Instagramが選択されている場合はDropboxにもアップロード
             if (selectedPlatforms.includes("instagram")) {
               try {
-                addLogEntry("INFO", "Adjusting image for Instagram", { originalFile: { name: file.name, size: file.size, type: file.type } });
+                addLogEntry("INFO", "Adjusting image for Instagram", {
+                  originalFile: {
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                  },
+                });
                 const instagramImage = await adjustImageForInstagram(file);
-                addLogEntry("INFO", "Image adjusted for Instagram", { adjustedFile: { name: instagramImage.name, size: instagramImage.size, type: instagramImage.type } });
-                
-                const dropboxResult = await uploadImageToDropbox(instagramImage, uploadResult.imageId);
+                addLogEntry("INFO", "Image adjusted for Instagram", {
+                  adjustedFile: {
+                    name: instagramImage.name,
+                    size: instagramImage.size,
+                    type: instagramImage.type,
+                  },
+                });
+
+                const dropboxResult = await uploadImageToDropbox(
+                  instagramImage,
+                  uploadResult.imageId,
+                );
                 if (dropboxResult.success) {
                   // Google SheetsのDropbox URLカラムを更新
-                  await updateImageDropboxUrl(uploadResult.imageId, dropboxResult.directUrl);
-                  addLogEntry("INFO", "Image also uploaded to Dropbox for Instagram", {
-                    imageId: uploadResult.imageId,
-                    dropboxUrl: dropboxResult.directUrl,
-                  });
+                  await updateImageDropboxUrl(
+                    uploadResult.imageId,
+                    dropboxResult.directUrl,
+                  );
+                  addLogEntry(
+                    "INFO",
+                    "Image also uploaded to Dropbox for Instagram",
+                    {
+                      imageId: uploadResult.imageId,
+                      dropboxUrl: dropboxResult.directUrl,
+                    },
+                  );
                 } else {
                   addLogEntry("WARN", "Failed to upload to Dropbox", {
                     imageId: uploadResult.imageId,
@@ -985,10 +1024,20 @@ const PostForm: React.FC<PostFormProps> = ({
                   });
                 }
               } catch (dropboxError) {
-                addLogEntry("ERROR", "Dropbox upload error including image processing", {
-                  imageId: uploadResult.imageId,
-                  error: dropboxError instanceof Error ? { message: dropboxError.message, stack: dropboxError.stack } : dropboxError,
-                });
+                addLogEntry(
+                  "ERROR",
+                  "Dropbox upload error including image processing",
+                  {
+                    imageId: uploadResult.imageId,
+                    error:
+                      dropboxError instanceof Error
+                        ? {
+                            message: dropboxError.message,
+                            stack: dropboxError.stack,
+                          }
+                        : dropboxError,
+                  },
+                );
               }
             }
           }
