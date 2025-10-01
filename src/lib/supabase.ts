@@ -836,9 +836,15 @@ export const addPostToGoogleSheet = async (post: any) => {
     }
 
     // Create and update timestamps in JST
+//    const now = new Date();
+//    const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+//    const jstTimestamp = jstNow.toISOString();
+
+    // 予定時刻と同じ処理
     const now = new Date();
-    const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-    const jstTimestamp = jstNow.toISOString();
+    const jstTimestamp = now
+      .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
+      .slice(0, 16);
 
     const response = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}:append?valueInputOption=RAW`,
@@ -959,9 +965,16 @@ export const updatePostInGoogleSheet = async (postId: string, updates: any) => {
         updatedRow[8] = updates.deleted ? "TRUE" : "FALSE"; // Delete flag is at index 8
       }
       // Update timestamp in JST
+//      const now = new Date();
+//      const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+//      updatedRow[10] = jstNow.toISOString(); // Updated at is at index 10
+
+            // Update timestamp in JST
       const now = new Date();
-      const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-      updatedRow[10] = jstNow.toISOString(); // Updated at is at index 10
+      const jstTimestamp = now
+        .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
+        .slice(0, 16);
+      updatedRow[10] = jstTimestamp; // Updated at is at index 10
 
       const updateResponse = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}!A${index}:K${index}?valueInputOption=RAW`,
