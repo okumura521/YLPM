@@ -57,8 +57,9 @@ interface Post {
   channels?: string[];
   status: "pending" | "sent" | "failed" | "draft";
   updatedAt: string;
-  //  imageUrl?: string;
   imageIds?: string[];
+  // Google Sheetから取得したステータスデータ（{postId}_{platform} = status形式）
+  statusData?: Record<string, "pending" | "sent" | "failed" | "draft">;
 }
 
 const Home = () => {
@@ -166,7 +167,78 @@ const Home = () => {
       }
 
       const postsFromSheet = await fetchPostsFromGoogleSheet();
-      setPosts(postsFromSheet);
+      
+      // Google Sheetから全ス���ータスデータを取得
+      const settings = await getUserSettings();
+      if (settings?.google_sheet_id) {
+        try {
+          const accessToken = await getGoogleAccessToken();
+          const sheetName = encodeURIComponent("投稿データ");
+          
+          const response = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}?majorDimension=ROWS`,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            const rows = data.values || [];
+            
+            // ステータスデータを収集（{postId}_{platform} = status形式）
+            const statusDataMap: Record<string, Record<string, string>> = {};
+            
+            for (let i = 1; i < rows.length; i++) {
+              const row = rows[i];
+              const fullId = row[0] || "";
+              const status = row[4] || "pending";
+              const isDeleted = row[8] === "TRUE";
+              
+              if (isDeleted) continue;
+              
+              // fullIdから baseId と platform を抽出
+              const parts = fullId.split("_");
+              if (parts.length >= 2) {
+                const baseId = parts[0];
+                const platform = parts.slice(1).join("_").toLowerCase();
+                
+                if (!statusDataMap[baseId]) {
+                  statusDataMap[baseId] = {};
+                }
+                
+                // {postId}_{platform} = status の形式で保存
+                statusDataMap[baseId][`${baseId}_${platform}`] = status;
+              }
+            }
+            
+            // postsにstatusDataを追加
+            const postsWithStatus = postsFromSheet.map(post => ({
+              ...post,
+              statusData: statusDataMap[post.id] || {}
+            }));
+            
+            setPosts(postsWithStatus);
+            addLogEntry("INFO", "Posts fetched with status data", {
+              count: postsWithStatus.length,
+              statusDataCount: Object.keys(statusDataMap).length
+            });
+          } else {
+            // ステータスデータ取得失敗時は通常のpostsを使用
+            setPosts(postsFromSheet);
+            addLogEntry("WARN", "Failed to fetch status data, using default posts");
+          }
+        } catch (error) {
+          // エラー時は通常のpostsを使用
+          setPosts(postsFromSheet);
+          addLogEntry("ERROR", "Error fetching status data", error);
+        }
+      } else {
+        setPosts(postsFromSheet);
+      }
+      
       setSheetError(""); // Clear any existing errors
       fetchRetryAttempted.current = false; // Reset retry flag on success
       updateLastRefreshTime();

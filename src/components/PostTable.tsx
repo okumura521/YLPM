@@ -25,7 +25,10 @@ interface Post {
   scheduleTime: string;
   platforms: string[];
   status: "pending" | "sent" | "failed" | "draft";
+  platformStatuses?: Record<string, "pending" | "sent" | "failed" | "draft">;
   updatedAt: string;
+  // Google Sheetから取得したステータスデータ（{postId}_{platform} = status形式）
+  statusData?: Record<string, "pending" | "sent" | "failed" | "draft">;
 }
 
 interface PostTableProps {
@@ -216,25 +219,227 @@ const PostTable: React.FC<PostTableProps> = ({
             </TableHeader>
             <TableBody>
               {sortedPosts.length > 0 ? (
-                sortedPosts.map((post) => (
-                  <TableRow key={post.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedPosts.includes(post.id)}
-                        onCheckedChange={(checked) =>
-                          handleSelectPost(post.id, !!checked)
+                sortedPosts.flatMap((post) => {
+                  // statusDataから各プラットフォームのステータスを取得
+                  const hasStatusData =
+                    post.statusData && Object.keys(post.statusData).length > 0;
+
+                  if (hasStatusData && post.platforms.length > 0) {
+                    return post.platforms.map((platform, index) => {
+                      // Google Sheetのフォーマット: {postId}_{platform}
+                      const statusKey = `${post.id}_${platform.toLowerCase()}`;
+                      const platformStatus =
+                        post.statusData?.[statusKey] || post.status;
+                      const isFirstRow = index === 0;
+
+                      const getPlatformBadgeStyle = (platform: string) => {
+                        switch (platform.toLowerCase()) {
+                          case "x":
+                          case "twitter":
+                            return "bg-black text-white hover:bg-gray-800";
+                          case "facebook":
+                            return "bg-blue-600 text-white hover:bg-blue-700";
+                          case "instagram":
+                            return "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600";
+                          case "linkedin":
+                            return "bg-blue-700 text-white hover:bg-blue-800";
+                          case "line":
+                            return "bg-green-500 text-white hover:bg-green-600";
+                          case "discord":
+                            return "bg-indigo-600 text-white hover:bg-indigo-700";
+                          case "wordpress":
+                            return "bg-gray-700 text-white hover:bg-gray-800";
+                          default:
+                            return "bg-gray-500 text-white hover:bg-gray-600";
                         }
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      <div className="truncate max-w-[200px]">
-                        {post.content}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {post.scheduleTime.includes("-")
-                        ? post.scheduleTime.replace(/-/g, "/").replace(" ", " ")
-                        : new Date(post.scheduleTime)
+                      };
+
+                      return (
+                        <TableRow key={`${post.id}-${platform}`}>
+                          {isFirstRow && (
+                            <>
+                              <TableCell rowSpan={post.platforms.length}>
+                                <Checkbox
+                                  checked={selectedPosts.includes(post.id)}
+                                  onCheckedChange={(checked) =>
+                                    handleSelectPost(post.id, !!checked)
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell
+                                className="font-medium"
+                                rowSpan={post.platforms.length}
+                              >
+                                <div className="truncate max-w-[200px]">
+                                  {post.content}
+                                </div>
+                              </TableCell>
+                              <TableCell rowSpan={post.platforms.length}>
+                                {post.scheduleTime.includes("-")
+                                  ? post.scheduleTime
+                                      .replace(/-/g, "/")
+                                      .replace(" ", " ")
+                                  : new Date(post.scheduleTime)
+                                      .toLocaleString("ja-JP", {
+                                        timeZone: "Asia/Tokyo",
+                                        year: "numeric",
+                                        month: "2-digit",
+                                        day: "2-digit",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })
+                                      .replace(/\/(\d{4})/, "/$1")
+                                      .replace(
+                                        /(\d{2}):(\d{2}):(\d{2})/,
+                                        "$1:$2",
+                                      )}
+                              </TableCell>
+                            </>
+                          )}
+                          <TableCell>
+                            <Badge className={getPlatformBadgeStyle(platform)}>
+                              {platform}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={getStatusBadgeVariant(platformStatus)}
+                            >
+                              {getStatusText(platformStatus)}
+                            </Badge>
+                          </TableCell>
+                          {isFirstRow && (
+                            <>
+                              <TableCell rowSpan={post.platforms.length}>
+                                {new Date(post.updatedAt)
+                                  .toLocaleString("ja-JP", {
+                                    timeZone: "Asia/Tokyo",
+                                    year: "numeric",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                  .replace(/\/(\d{4})/, "/$1")
+                                  .replace(/(\d{2}):(\d{2}):(\d{2})/, "$1:$2")}
+                              </TableCell>
+                              <TableCell
+                                className="text-right"
+                                rowSpan={post.platforms.length}
+                              >
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                      <span className="sr-only">Open menu</span>
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => onEdit(post.id)}
+                                    >
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      編集
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => onDelete(post.id)}
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      削除
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => onRefresh(post.id)}
+                                    >
+                                      <RefreshCw className="mr-2 h-4 w-4" />
+                                      ステータス更新
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </>
+                          )}
+                        </TableRow>
+                      );
+                    });
+                  } else {
+                    // 従来の単一行表示（statusDataがない場合）
+                    return (
+                      <TableRow key={post.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedPosts.includes(post.id)}
+                            onCheckedChange={(checked) =>
+                              handleSelectPost(post.id, !!checked)
+                            }
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <div className="truncate max-w-[200px]">
+                            {post.content}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {post.scheduleTime.includes("-")
+                            ? post.scheduleTime
+                                .replace(/-/g, "/")
+                                .replace(" ", " ")
+                            : new Date(post.scheduleTime)
+                                .toLocaleString("ja-JP", {
+                                  timeZone: "Asia/Tokyo",
+                                  year: "numeric",
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                                .replace(/\/(\d{4})/, "/$1")
+                                .replace(/(\d{2}):(\d{2}):(\d{2})/, "$1:$2")}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1 flex-wrap">
+                            {(post.platforms || []).map((platform) => {
+                              const getPlatformBadgeStyle = (
+                                platform: string,
+                              ) => {
+                                switch (platform.toLowerCase()) {
+                                  case "x":
+                                  case "twitter":
+                                    return "bg-black text-white hover:bg-gray-800";
+                                  case "facebook":
+                                    return "bg-blue-600 text-white hover:bg-blue-700";
+                                  case "instagram":
+                                    return "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600";
+                                  case "linkedin":
+                                    return "bg-blue-700 text-white hover:bg-blue-800";
+                                  case "line":
+                                    return "bg-green-500 text-white hover:bg-green-600";
+                                  case "discord":
+                                    return "bg-indigo-600 text-white hover:bg-indigo-700";
+                                  case "wordpress":
+                                    return "bg-gray-700 text-white hover:bg-gray-800";
+                                  default:
+                                    return "bg-gray-500 text-white hover:bg-gray-600";
+                                }
+                              };
+
+                              return (
+                                <Badge
+                                  key={platform}
+                                  className={getPlatformBadgeStyle(platform)}
+                                >
+                                  {platform}
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusBadgeVariant(post.status)}>
+                            {getStatusText(post.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(post.updatedAt)
                             .toLocaleString("ja-JP", {
                               timeZone: "Asia/Tokyo",
                               year: "numeric",
@@ -245,91 +450,43 @@ const PostTable: React.FC<PostTableProps> = ({
                             })
                             .replace(/\/(\d{4})/, "/$1")
                             .replace(/(\d{2}):(\d{2}):(\d{2})/, "$1:$2")}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {(post.platforms || []).map((platform) => {
-                          const getPlatformBadgeStyle = (platform: string) => {
-                            switch (platform.toLowerCase()) {
-                              case "x":
-                              case "twitter":
-                                return "bg-black text-white hover:bg-gray-800";
-                              case "facebook":
-                                return "bg-blue-600 text-white hover:bg-blue-700";
-                              case "instagram":
-                                return "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600";
-                              case "linkedin":
-                                return "bg-blue-700 text-white hover:bg-blue-800";
-                              case "line":
-                                return "bg-green-500 text-white hover:bg-green-600";
-                              case "discord":
-                                return "bg-indigo-600 text-white hover:bg-indigo-700";
-                              case "wordpress":
-                                return "bg-gray-700 text-white hover:bg-gray-800";
-                              default:
-                                return "bg-gray-500 text-white hover:bg-gray-600";
-                            }
-                          };
-
-                          return (
-                            <Badge
-                              key={platform}
-                              className={getPlatformBadgeStyle(platform)}
-                            >
-                              {platform}
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusBadgeVariant(post.status)}>
-                        {getStatusText(post.status)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(post.updatedAt)
-                        .toLocaleString("ja-JP", {
-                          timeZone: "Asia/Tokyo",
-                          year: "numeric",
-                          month: "2-digit",
-                          day: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                        .replace(/\/(\d{4})/, "/$1")
-                        .replace(/(\d{2}):(\d{2}):(\d{2})/, "$1:$2")}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Open menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => onEdit(post.id)}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            編集
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onDelete(post.id)}>
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            削除
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onRefresh(post.id)}>
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                            ステータス更新
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Open menu</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => onEdit(post.id)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                編集
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => onDelete(post.id)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                削除
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => onRefresh(post.id)}
+                              >
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                ステータス更新
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+                })
               ) : (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8">
-                    投稿が見つかりません。最初の投稿を作成してください！
+                    投稿が見つかりません。最初の投稿を作成してください!
                   </TableCell>
                 </TableRow>
               )}
