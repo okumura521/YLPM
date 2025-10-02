@@ -11,6 +11,7 @@ import {
   FileText,
   Trash2,
   FileSpreadsheet,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import PostTable from "./PostTable";
@@ -274,7 +275,12 @@ const Home = () => {
           // Force logout
           await handleLogout();
           return;
-        }
+        }else {
+          // リフレッシュ失敗時もエラーメッセージを表示
+          setSheetError(
+            "Google認証の期限が切れています。再ログインまたは設定の確認をお願いします。",
+          );
+          }
       }
 
       // Set user-friendly error message
@@ -876,7 +882,7 @@ const Home = () => {
   };
 
   const handleUserSettings = () => {
-    navigate("/settings");
+    navigate("/create-sheet");
   };
 
   const handleShowLogs = () => {
@@ -966,18 +972,36 @@ const Home = () => {
         <Card className="mb-6 border-red-200 bg-red-50">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-red-800">
-                <AlertTriangle className="h-5 w-5" />
+              <div className="flex items-center gap-2 text-red-800 flex-1">
+                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
                 <p className="font-medium">{sheetError}</p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleUserSettings}
-                className="text-red-700 border-red-300 hover:bg-red-100"
-              >
-                設定を確認
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUserSettings}
+                  className="text-red-700 border-red-300 hover:bg-red-100"
+                >
+                  設定を確認
+                </Button>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  className="text-red-700 border-red-300 hover:bg-red-100"
+                >
+                  再試行
+                </Button>
+                <Button 
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSheetError("")}
+                  className="text-red-700 hover:bg-red-100"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

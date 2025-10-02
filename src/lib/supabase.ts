@@ -1122,7 +1122,7 @@ export const fetchPostsFromGoogleSheet = async () => {
   } catch (error) {
     console.error("Error fetching posts from Google Sheet:", error);
     addLogEntry("ERROR", "Error fetching posts from Google Sheet", error);
-    return [];
+    throw error;
   }
 };
 
