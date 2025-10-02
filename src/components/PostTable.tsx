@@ -29,6 +29,8 @@ interface Post {
   updatedAt: string;
   // Google Sheetから取得したステータスデータ（{postId}_{platform} = status形式）
   statusData?: Record<string, "pending" | "sent" | "failed" | "draft">;
+  // Google Sheetから取得した予定時刻データ（{postId}_{platform} = scheduleTime形式）
+  scheduleTimeData?: Record<string, string>;
 }
 
 interface PostTableProps {
@@ -230,6 +232,7 @@ const PostTable: React.FC<PostTableProps> = ({
                       const statusKey = `${post.id}_${platform.toLowerCase()}`;
                       const platformStatus =
                         post.statusData?.[statusKey] || post.status;
+                      const platformScheduleTime = post.scheduleTimeData?.[statusKey] || post.scheduleTime;
                       const isFirstRow = index === 0;
 
                       const getPlatformBadgeStyle = (platform: string) => {
@@ -274,28 +277,25 @@ const PostTable: React.FC<PostTableProps> = ({
                                   {post.content}
                                 </div>
                               </TableCell>
-                              <TableCell rowSpan={post.platforms.length}>
-                                {post.scheduleTime.includes("-")
-                                  ? post.scheduleTime
-                                      .replace(/-/g, "/")
-                                      .replace(" ", " ")
-                                  : new Date(post.scheduleTime)
-                                      .toLocaleString("ja-JP", {
-                                        timeZone: "Asia/Tokyo",
-                                        year: "numeric",
-                                        month: "2-digit",
-                                        day: "2-digit",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })
-                                      .replace(/\/(\d{4})/, "/$1")
-                                      .replace(
-                                        /(\d{2}):(\d{2}):(\d{2})/,
-                                        "$1:$2",
-                                      )}
-                              </TableCell>
                             </>
                           )}
+                          <TableCell>
+                            {platformScheduleTime.includes("-")
+                              ? platformScheduleTime
+                                  .replace(/-/g, "/")
+                                  .replace(" ", " ")
+                              : new Date(platformScheduleTime)
+                                  .toLocaleString("ja-JP", {
+                                    timeZone: "Asia/Tokyo",
+                                    year: "numeric",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                  .replace(/\/(\d{4})/, "/$1")
+                                  .replace(/(\d{2}):(\d{2}):(\d{2})/, "$1:$2")}
+</TableCell>
                           <TableCell>
                             <Badge className={getPlatformBadgeStyle(platform)}>
                               {platform}

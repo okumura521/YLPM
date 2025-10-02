@@ -1102,6 +1102,7 @@ export const fetchPostsFromGoogleSheet = async () => {
             (row[4] as "pending" | "sent" | "failed" | "draft") || "pending",
           imageIds: imageIds, // 画像IDの配列
           updatedAt: row[10] || row[9] || new Date().toISOString(), // Updated at is at index 10
+          scheduleTimeData: {},
         });
       }
 
@@ -1110,7 +1111,16 @@ export const fetchPostsFromGoogleSheet = async () => {
       if (platform && !post.platforms.includes(platform)) {
         post.platforms.push(platform);
       }
+
+      if (platform) {
+        const platformKey = `${baseId}_${platform.toLowerCase()}`;
+          // 予定時刻を保存（そのまま使用）
+        const platformScheduleTime = row[3] || post.scheduleTime;
+        post.scheduleTimeData[platformKey] = platformScheduleTime;
+      }
     }
+
+    
 
     const posts = Array.from(postsMap.values());
 
