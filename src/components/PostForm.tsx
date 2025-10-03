@@ -64,7 +64,7 @@ interface PostData {
   id?: string;
   content: string;
   scheduleTime?: Date;
-  platforms: string[];
+  platforms: string[] | Record<string, any>;
   channels?: string[];
   isScheduled: boolean;
   image?: File | null;
@@ -79,6 +79,7 @@ interface PostData {
   // 新しい画像管理システム
   imageIds?: string[]; // 画像IDの配列
   platformImageIds?: Record<string, string[]>; // プラットフォーム別の画像ID
+  scheduleTimeData?: Record<string, string>;
 }
 
 interface ImagePreviewData {
@@ -278,7 +279,6 @@ const PostForm: React.FC<PostFormProps> = ({
               ? [initialData]
               : [])
         : [];
-
       if (isEditing && editData && editData.length > 0) {
         const primaryPost = editData[0];
 
@@ -322,11 +322,14 @@ const PostForm: React.FC<PostFormProps> = ({
             newPlatformContent[platform] = platformData.content || "";
 
             // スケジュール設定
-            if (primaryPost.scheduleTime) {
-              const scheduleDate = new Date(primaryPost.scheduleTime);
+            const platformScheduleKey = primaryPost.id ? `${primaryPost.id}_${platform.toLowerCase()}` : platform;
+            const platformScheduleTime = primaryPost.scheduleTimeData?.[platformScheduleKey] || primaryPost.scheduleTime;
+
+            if (platformScheduleTime && typeof platformScheduleTime === 'string' && platformScheduleTime.includes(' ')) {
+              const parts = platformScheduleTime.split(' ');
               newPlatformSchedules[platform] = {
-                date: scheduleDate.toISOString().split("T")[0],
-                time: scheduleDate.toTimeString().slice(0, 5),
+                date: parts[0],
+                time: parts[1],
                 enabled: true,
               };
             } else {
@@ -538,18 +541,33 @@ const PostForm: React.FC<PostFormProps> = ({
               if (!newSelectedPlatforms.includes(platform)) {
                 newSelectedPlatforms.push(platform);
               }
-
+              debugger;
               // プラットフォームごとのスケジュールを設定
-              if (p.scheduleTime) {
-                const scheduleDate = new Date(p.scheduleTime);
-                // Convert to JST for display
-                const jstDate = new Date(scheduleDate.getTime());
+              const platformScheduleKey = p.id ? `${p.id}_${platform.toLowerCase()}` : platform;
+              const platformScheduleTime = p.scheduleTimeData?.[platformScheduleKey] || p.scheduleTime;
+              if (platformScheduleTime && typeof platformScheduleTime === 'string' && platformScheduleTime.includes(' ')) {
+                addLogEntry("DEBUG", "Processing platform schedule", {
+                  platform: platform,
+                  originalScheduleTime: platformScheduleTime,
+                });
+                const parts = platformScheduleTime.split(' ');
                 newPlatformSchedules[platform] = {
-                  date: jstDate.toISOString().split("T")[0],
-                  time: jstDate.toTimeString().slice(0, 5),
+                  date: parts[0],
+                  time: parts[1],
                   enabled: true,
                 };
               }
+
+//              if (p.scheduleTime) {
+//                const scheduleDate = new Date(p.scheduleTime);
+                // Convert to JST for display
+//                const jstDate = new Date(scheduleDate.getTime());
+//                newPlatformSchedules[platform] = {
+//                  date: jstDate.toISOString().split("T")[0],
+//                  time: jstDate.toTimeString().slice(0, 5),
+//                  enabled: true,
+//                };
+//              }
 
               // 画像IDを設定
               if (p.imageIds) {

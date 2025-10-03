@@ -56,26 +56,58 @@ const PostTable: React.FC<PostTableProps> = ({
   const [processedPosts, setProcessedPosts] = useState<Post[]>(posts);
   const [lastRefreshTime, setLastRefreshTime] = useState<string>("");
 
-  // Check for failed posts based on schedule time
+  // Check for failed posts based on schedule time (platform-specific)
   useEffect(() => {
     const checkFailedPosts = () => {
       const now = new Date();
       const updatedPosts = posts.map((post) => {
-        if (post.status === "pending" && post.scheduleTime) {
-          let scheduleTime: Date;
-          if (post.scheduleTime.includes("-")) {
-            // yyyy-mm-dd HH:MM format
-            scheduleTime = new Date(
-              post.scheduleTime.replace(" ", "T") + ":00",
-            );
-          } else {
-            scheduleTime = new Date(post.scheduleTime);
-          }
-          const timeDiff = now.getTime() - scheduleTime.getTime();
-          const fiveMinutesInMs = 5 * 60 * 1000;
+        // プラットフォーム毎のステータスデータがある場合
+        if (post.scheduleTimeData && Object.keys(post.scheduleTimeData).length > 0) {
+          const updatedStatusData = { ...post.statusData };
+          let hasUpdates = false;
 
-          if (timeDiff > fiveMinutesInMs) {
-            return { ...post, status: "failed" as const };
+          // 各プラットフォームの予定時刻をチェック
+          Object.entries(post.scheduleTimeData).forEach(([key, scheduleTimeStr]) => {
+            const currentStatus = updatedStatusData?.[key] || post.status;
+            
+            if (currentStatus === "pending" && scheduleTimeStr) {
+              let scheduleTime: Date;
+              if (scheduleTimeStr.includes("-")) {
+                scheduleTime = new Date(scheduleTimeStr.replace(" ", "T") + ":00");
+              } else {
+                scheduleTime = new Date(scheduleTimeStr);
+              }
+              
+              const timeDiff = now.getTime() - scheduleTime.getTime();
+              const fifteenMinutesInMs = 15 * 60 * 1000;
+
+              if (timeDiff > fifteenMinutesInMs) {
+                updatedStatusData[key] = "failed";
+                hasUpdates = true;
+              }
+            }
+          });
+
+          if (hasUpdates) {
+            return { ...post, statusData: updatedStatusData };
+          }
+        } else {
+          // 従来の処理（statusDataがない場合）
+          if (post.status === "pending" && post.scheduleTime) {
+            let scheduleTime: Date;
+            if (post.scheduleTime.includes("-")) {
+              scheduleTime = new Date(
+                post.scheduleTime.replace(" ", "T") + ":00",
+              );
+            } else {
+              scheduleTime = new Date(post.scheduleTime);
+            }
+            const timeDiff = now.getTime() - scheduleTime.getTime();
+            const fiveMinutesInMs = 5 * 60 * 1000;
+
+            if (timeDiff > fiveMinutesInMs) {
+              return { ...post, status: "failed" as const };
+            }
           }
         }
         return post;

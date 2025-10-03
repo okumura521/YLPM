@@ -54,11 +54,12 @@ interface Post {
   id: string;
   content: string;
   scheduleTime: string;
-  platforms: string[];
+  platforms: string[] | Record<string, any>;
   channels?: string[];
   status: "pending" | "sent" | "failed" | "draft";
   updatedAt: string;
   imageIds?: string[];
+  scheduleTimeData?: Record<string, string>;
   // Google Sheetから取得したステータスデータ（{postId}_{platform} = status形式）
   statusData?: Record<string, "pending" | "sent" | "failed" | "draft">;
 }
@@ -808,6 +809,14 @@ const Home = () => {
       // 重複を除去
       const uniqueImageUrls = [...new Set(allImageUrls)];
 
+      const scheduleTimeData: Record<string, string> = {};
+      matchingRows.forEach((row) => {
+        if (row.platform) {
+          const platformScheduleKey = `${baseId}_${row.platform.toLowerCase()}`;
+          scheduleTimeData[platformScheduleKey] = row.scheduleTime;
+        }
+      });
+
       const editData = {
         id: baseId,
         platforms: platformData,
@@ -815,6 +824,7 @@ const Home = () => {
         status: matchingRows[0]?.status || "pending",
         imageUrls: uniqueImageUrls,
         isScheduled: !!matchingRows[0]?.scheduleTime,
+        scheduleTimeData: scheduleTimeData,
       };
 
       addLogEntry("INFO", "Setting platform-specific edit data for PostForm", {
@@ -841,7 +851,7 @@ const Home = () => {
         totalImageUrls: uniqueImageUrls.length,
       });
 
-      setCurrentPost([editData]);
+      setCurrentPost(editData);
       setIsEditDialogOpen(true);
     } catch (error) {
       console.error("Error fetching platform-specific data:", error);
