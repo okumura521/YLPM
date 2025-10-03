@@ -475,8 +475,14 @@ export const createGoogleSheetWithOAuth = async (
                       values: [
                         { userEnteredValue: { stringValue: "画像ID" } },
                         { userEnteredValue: { stringValue: "ファイル名" } },
-                        { userEnteredValue: { stringValue: "Googledrive画像URL" } },
-                        { userEnteredValue: { stringValue: "アップロード日時" },},
+                        {
+                          userEnteredValue: {
+                            stringValue: "Googledrive画像URL",
+                          },
+                        },
+                        {
+                          userEnteredValue: { stringValue: "アップロード日時" },
+                        },
                         { userEnteredValue: { stringValue: "Dropbox画像URL" } },
                       ],
                     },
@@ -836,9 +842,9 @@ export const addPostToGoogleSheet = async (post: any) => {
     }
 
     // Create and update timestamps in JST
-//    const now = new Date();
-//    const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-//    const jstTimestamp = jstNow.toISOString();
+    //    const now = new Date();
+    //    const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    //    const jstTimestamp = jstNow.toISOString();
 
     // 予定時刻と同じ処理
     const now = new Date();
@@ -963,13 +969,16 @@ export const updatePostInGoogleSheet = async (postId: string, updates: any) => {
       }
       if (updates.deleted !== undefined) {
         updatedRow[8] = updates.deleted ? "TRUE" : "FALSE"; // Delete flag is at index 8
+        if (updates.deleted) {
+          updatedRow[4] = "deleted";
+        }
       }
       // Update timestamp in JST
-//      const now = new Date();
-//      const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-//      updatedRow[10] = jstNow.toISOString(); // Updated at is at index 10
+      //      const now = new Date();
+      //      const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+      //      updatedRow[10] = jstNow.toISOString(); // Updated at is at index 10
 
-            // Update timestamp in JST
+      // Update timestamp in JST
       const now = new Date();
       const jstTimestamp = now
         .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
@@ -1114,13 +1123,11 @@ export const fetchPostsFromGoogleSheet = async () => {
 
       if (platform) {
         const platformKey = `${baseId}_${platform.toLowerCase()}`;
-          // 予定時刻を保存（そのまま使用）
+        // 予定時刻を保存（そのまま使用）
         const platformScheduleTime = row[3] || post.scheduleTime;
         post.scheduleTimeData[platformKey] = platformScheduleTime;
       }
     }
-
-    
 
     const posts = Array.from(postsMap.values());
 
@@ -1276,7 +1283,8 @@ export const initiateDropboxAuth = async (folderName: string) => {
     );
 
     // Dropbox OAuth URL
-    const dropboxAuthUrl = `https://www.dropbox.com/oauth2/authorize?` +
+    const dropboxAuthUrl =
+      `https://www.dropbox.com/oauth2/authorize?` +
       `client_id=${import.meta.env.VITE_DROPBOX_APP_KEY}&` +
       `response_type=code&` +
       `token_access_type=offline&` + // refresh_tokenを取得するためにこの行を追加
@@ -1316,12 +1324,15 @@ export const initiateDropboxAuth = async (folderName: string) => {
       window.addEventListener("message", messageHandler);
 
       // Timeout after 5 minutes
-      setTimeout(() => {
-        clearInterval(checkClosed);
-        window.removeEventListener("message", messageHandler);
-        popup?.close();
-        reject(new Error("認証がタイムアウトしました"));
-      }, 5 * 60 * 1000);
+      setTimeout(
+        () => {
+          clearInterval(checkClosed);
+          window.removeEventListener("message", messageHandler);
+          popup?.close();
+          reject(new Error("認証がタイムアウトしました"));
+        },
+        5 * 60 * 1000,
+      );
     });
   } catch (error) {
     console.error("Error initiating Dropbox auth:", error);
@@ -1442,7 +1453,7 @@ export const uploadImageToDropbox = async (file: File, imageId: string) => {
       reader.onload = () => {
         const result = reader.result as string;
         // Remove data URL prefix
-        const base64Data = result.split(',')[1];
+        const base64Data = result.split(",")[1];
         resolve(base64Data);
       };
       reader.onerror = reject;
@@ -1455,15 +1466,15 @@ export const uploadImageToDropbox = async (file: File, imageId: string) => {
 
     // Call Supabase Edge Function for upload
     const { data, error } = await supabase.functions.invoke(
-      'supabase-functions-dropbox-upload',
+      "supabase-functions-dropbox-upload",
       {
         body: {
           user_id: user.id,
           file_data: fileData,
           file_name: fileName,
-          folder_name: settings.dropbox_folder_name || 'YLPM Images',
+          folder_name: settings.dropbox_folder_name || "YLPM Images",
         },
-      }
+      },
     );
 
     if (error) {
@@ -1471,7 +1482,7 @@ export const uploadImageToDropbox = async (file: File, imageId: string) => {
     }
 
     if (!data.success) {
-      throw new Error(data.error || 'Upload failed');
+      throw new Error(data.error || "Upload failed");
     }
 
     addLogEntry("INFO", "Image uploaded to Dropbox successfully", {
@@ -1575,7 +1586,10 @@ export const addDropboxColumnToImageSheet = async () => {
 };
 
 // 画像IDに対してDropbox URLを更新
-export const updateImageDropboxUrl = async (imageId: string, dropboxUrl: string) => {
+export const updateImageDropboxUrl = async (
+  imageId: string,
+  dropboxUrl: string,
+) => {
   try {
     const settings = await getUserSettings();
     if (!settings?.google_sheet_id) {
