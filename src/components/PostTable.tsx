@@ -28,7 +28,10 @@ interface Post {
   platformStatuses?: Record<string, "pending" | "sent" | "failed" | "draft">;
   updatedAt: string;
   // Google Sheetから取得したステータスデータ（{postId}_{platform} = status形式）
-  statusData?: Record<string, "pending" | "sent" | "failed" | "draft">;
+  statusData?: Record<
+    string,
+    "pending" | "sent" | "failed" | "draft" | "sendig"
+  >;
   // Google Sheetから取得した予定時刻データ（{postId}_{platform} = scheduleTime形式）
   scheduleTimeData?: Record<string, string>;
 }
@@ -62,38 +65,45 @@ const PostTable: React.FC<PostTableProps> = ({
       const now = new Date();
       const updatedPosts = posts.map((post) => {
         // プラットフォーム毎のステータスデータがある場合
-        if (post.scheduleTimeData && Object.keys(post.scheduleTimeData).length > 0) {
+        if (
+          post.scheduleTimeData &&
+          Object.keys(post.scheduleTimeData).length > 0
+        ) {
           const updatedStatusData = { ...post.statusData };
           let hasUpdates = false;
 
           // 各プラットフォームの予定時刻をチェック
-          Object.entries(post.scheduleTimeData).forEach(([key, scheduleTimeStr]) => {
-            const currentStatus = updatedStatusData?.[key] || post.status;
-            
-            if (currentStatus === "pending" && scheduleTimeStr) {
-              let scheduleTime: Date;
-              if (scheduleTimeStr.includes("-")) {
-                scheduleTime = new Date(scheduleTimeStr.replace(" ", "T") + ":00");
-              } else {
-                scheduleTime = new Date(scheduleTimeStr);
-              }
-              
-              const timeDiff = now.getTime() - scheduleTime.getTime();
-              const fifteenMinutesInMs = 15 * 60 * 1000;
+          Object.entries(post.scheduleTimeData).forEach(
+            ([key, scheduleTimeStr]) => {
+              const currentStatus = updatedStatusData?.[key] || post.status;
 
-              if (timeDiff > fifteenMinutesInMs) {
-                updatedStatusData[key] = "failed";
-                hasUpdates = true;
+              if (currentStatus === "sending" && scheduleTimeStr) {
+                let scheduleTime: Date;
+                if (scheduleTimeStr.includes("-")) {
+                  scheduleTime = new Date(
+                    scheduleTimeStr.replace(" ", "T") + ":00",
+                  );
+                } else {
+                  scheduleTime = new Date(scheduleTimeStr);
+                }
+
+                const timeDiff = now.getTime() - scheduleTime.getTime();
+                const fifteenMinutesInMs = 15 * 60 * 1000;
+
+                if (timeDiff > fifteenMinutesInMs) {
+                  updatedStatusData[key] = "failed";
+                  hasUpdates = true;
+                }
               }
-            }
-          });
+            },
+          );
 
           if (hasUpdates) {
             return { ...post, statusData: updatedStatusData };
           }
         } else {
           // 従来の処理（statusDataがない場合）
-          if (post.status === "pending" && post.scheduleTime) {
+          if (post.status === "sending" && post.scheduleTime) {
             let scheduleTime: Date;
             if (post.scheduleTime.includes("-")) {
               scheduleTime = new Date(
@@ -103,7 +113,7 @@ const PostTable: React.FC<PostTableProps> = ({
               scheduleTime = new Date(post.scheduleTime);
             }
             const timeDiff = now.getTime() - scheduleTime.getTime();
-            const fiveMinutesInMs = 5 * 60 * 1000;
+            const fiveMinutesInMs = 15 * 60 * 1000;
 
             if (timeDiff > fiveMinutesInMs) {
               return { ...post, status: "failed" as const };
@@ -173,6 +183,8 @@ const PostTable: React.FC<PostTableProps> = ({
         return "destructive";
       case "draft":
         return "outline";
+      case "sending":
+        return "outline";
       default:
         return "default";
     }
@@ -185,9 +197,11 @@ const PostTable: React.FC<PostTableProps> = ({
       case "sent":
         return "送信済";
       case "failed":
-        return "失敗";
+        return "要確認";
       case "draft":
         return "下書き";
+      case "sending":
+        return "送信中";
       default:
         return status;
     }
@@ -195,13 +209,7 @@ const PostTable: React.FC<PostTableProps> = ({
 
   return (
     <Card className="w-full bg-white">
-      <CardHeader>
-        <CardTitle className="flex justify-between items-center">
-          <span>投稿一覧</span>
-          <div className="text-sm text-muted-foreground">
-            クリックして並び替え
-          </div>
-        </CardTitle>
+      <CardHeader className="h-[20px]">
         {lastRefreshTime && (
           <div className="text-xs text-muted-foreground mt-2 flex flex-row-reverse">
             最終更新: {lastRefreshTime}
@@ -227,7 +235,7 @@ const PostTable: React.FC<PostTableProps> = ({
                   className="cursor-pointer hover:bg-gray-50"
                   onClick={() => handleSort("scheduleTime")}
                 >
-                  予定時刻{" "}
+                  予定時刻 ▲▼{" "}
                   {sortConfig?.key === "scheduleTime" &&
                     (sortConfig.direction === "ascending" ? "↑" : "↓")}
                 </TableHead>
@@ -236,7 +244,7 @@ const PostTable: React.FC<PostTableProps> = ({
                   className="cursor-pointer hover:bg-gray-50"
                   onClick={() => handleSort("status")}
                 >
-                  ステータス{" "}
+                  ステータス▲▼{" "}
                   {sortConfig?.key === "status" &&
                     (sortConfig.direction === "ascending" ? "↑" : "↓")}
                 </TableHead>
@@ -244,7 +252,7 @@ const PostTable: React.FC<PostTableProps> = ({
                   className="cursor-pointer hover:bg-gray-50"
                   onClick={() => handleSort("updatedAt")}
                 >
-                  最終更新{" "}
+                  最終更新▲▼{" "}
                   {sortConfig?.key === "updatedAt" &&
                     (sortConfig.direction === "ascending" ? "↑" : "↓")}
                 </TableHead>
@@ -264,7 +272,8 @@ const PostTable: React.FC<PostTableProps> = ({
                       const statusKey = `${post.id}_${platform.toLowerCase()}`;
                       const platformStatus =
                         post.statusData?.[statusKey] || post.status;
-                      const platformScheduleTime = post.scheduleTimeData?.[statusKey] || post.scheduleTime;
+                      const platformScheduleTime =
+                        post.scheduleTimeData?.[statusKey] || post.scheduleTime;
                       const isFirstRow = index === 0;
 
                       const getPlatformBadgeStyle = (platform: string) => {
@@ -327,7 +336,7 @@ const PostTable: React.FC<PostTableProps> = ({
                                   })
                                   .replace(/\/(\d{4})/, "/$1")
                                   .replace(/(\d{2}):(\d{2}):(\d{2})/, "$1:$2")}
-</TableCell>
+                          </TableCell>
                           <TableCell>
                             <Badge className={getPlatformBadgeStyle(platform)}>
                               {platform}

@@ -89,7 +89,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </header>
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -160,59 +159,14 @@ export default function DashboardPage() {
             <CardContent>
               <p className="text-muted-foreground">
                 SNS投稿管理システムへようこそ。まずはGoogle Sheet・Google Drive
-                Folderの作成から初めてください。<br />
-                AI設定は、ユーザ設定ページで行います。<br />
-                Instagramへ投稿する場合はDropbox Folderの作成が必要です。<br />
+                Folderの作成から初めてください。
+                <br />
+                AI設定は、ユーザ設定ページで行います。
+                <br />
+                Instagramへ投稿する場合はDropbox Folderの作成が必要です。
+                <br />
               </p>
-
               {/* YLPM Support Status */}
-              <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
-                <h3 className="text-xl font-bold mb-4 text-blue-800">
-                  YLPM対応状況
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-2 bg-white rounded border">
-                      <span className="font-medium">X (Twitter)</span>
-                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
-                        利用可能
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between p-2 bg-white rounded border">
-                      <span className="font-medium">Instagram</span>
-                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
-                        利用可能
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between p-2 bg-white rounded border">
-                      <span className="font-medium">Facebook</span>
-                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
-                        利用可能
-                      </span>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-2 bg-white rounded border">
-                      <span className="font-medium">LINE</span>
-                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
-                        利用可能
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between p-2 bg-white rounded border">
-                      <span className="font-medium">Discord</span>
-                      <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
-                        利用可能
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between p-2 bg-white rounded border">
-                      <span className="font-medium">WordPress</span>
-                      <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                        make側の送信処理開発中
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
               {/* Usage Restrictions */}
               <div className="mt-6 p-6 bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-200 rounded-lg">
@@ -229,40 +183,35 @@ export default function DashboardPage() {
                     </p>
                   </div>
                   <div className="p-3 bg-white rounded border border-orange-200">
-                    <p className="font-medium text-orange-800">
-                      画像設定について
-                    </p>
+                    <p className="font-medium text-orange-800">WordPress</p>
                     <p className="text-sm text-gray-700">
-                      画像は最低1枚は設定してください。※画像0だと送信エラーになります
+                      Makeのシナリオに未実装なので使えません。
                     </p>
                   </div>
                 </div>
               </div>
-
               {/* Update History Section */}
               <div className="mt-6">
                 <h3 className="text-lg font-semibold mb-4">更新履歴</h3>
                 <div className="space-y-4">
-              {/* この下に更新履歴を追加してください */}
-                <div className="border-l-4 border-blue-500 pl-4">
+                  {/* この下に更新履歴を追加してください */}
+                  <div className="border-l-4 border-blue-500 pl-4">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-semibold">開発中</h4>
                       <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                        Ver.0
+                        Ver.0.3
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">
-                      2025年8月
+                      2025年9月
                     </p>
                     <ul className="text-sm space-y-1">
-                      <li>• SNS投稿作成・管理機能</li>
-                      <li>• Google Sheets連携</li>
-                      <li>• AI生成機能</li>
-                      <li>• 複数プラットフォーム対応</li>
-                      <li>• スケジュール投稿機能</li>
+                      <li>• PF事の画像割り当て処理修正</li>
+                      <li>• 送信中ステータス追加</li>
+                      <li>• 投稿一覧表示更新</li>
                     </ul>
                   </div>
-                <div className="border-l-4 border-blue-500 pl-4">
+                  <div className="border-l-4 border-blue-500 pl-4">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-semibold">開発中</h4>
                       <span className="text-xs bg-gray-100 px-2 py-1 rounded">
@@ -274,7 +223,9 @@ export default function DashboardPage() {
                     </p>
                     <ul className="text-sm space-y-1">
                       <li>• AI複数サービス登録機能追加</li>
-                      <li>• インスタグラム投稿画像用Dropbox Folder連携機能追加</li>
+                      <li>
+                        • インスタグラム投稿画像用Dropbox Folder連携機能追加
+                      </li>
                     </ul>
                   </div>
                   <div className="border-l-4 border-blue-500 pl-4">
@@ -292,7 +243,7 @@ export default function DashboardPage() {
                       <li>• 新規登録・編集ページ修正</li>
                     </ul>
                   </div>
-                     {/* 更新履歴フォーマット*/}
+                  {/* 更新履歴フォーマット*/}
                   <div className="border-l-4 border-blue-500 pl-4">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-semibold">開発中</h4>

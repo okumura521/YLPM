@@ -169,68 +169,71 @@ const Home = () => {
       }
 
       const postsFromSheet = await fetchPostsFromGoogleSheet();
-      
+
       // Google Sheetから全ス���ータスデータを取得
       const settings = await getUserSettings();
       if (settings?.google_sheet_id) {
         try {
           const accessToken = await getGoogleAccessToken();
           const sheetName = encodeURIComponent("投稿データ");
-          
+
           const response = await fetch(
             `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}?majorDimension=ROWS`,
             {
               headers: {
                 Authorization: `Bearer ${accessToken}`,
               },
-            }
+            },
           );
 
           if (response.ok) {
             const data = await response.json();
             const rows = data.values || [];
-            
+
             // ステータスデータを収集（{postId}_{platform} = status形式）
             const statusDataMap: Record<string, Record<string, string>> = {};
-            
+
             for (let i = 1; i < rows.length; i++) {
               const row = rows[i];
               const fullId = row[0] || "";
               const status = row[4] || "pending";
               const isDeleted = row[8] === "TRUE";
-              
+
               if (isDeleted) continue;
-              
+
               // fullIdから baseId と platform を抽出
               const parts = fullId.split("_");
               if (parts.length >= 2) {
                 const baseId = parts[0];
                 const platform = parts.slice(1).join("_").toLowerCase();
-                
+
                 if (!statusDataMap[baseId]) {
                   statusDataMap[baseId] = {};
                 }
-                
+
                 // {postId}_{platform} = status の形式で保存
                 statusDataMap[baseId][`${baseId}_${platform}`] = status;
               }
             }
-            
+
             // postsにstatusDataを追加
-            const postsWithStatus = postsFromSheet.map(post => ({
+            const postsWithStatus = postsFromSheet.map((post) => ({
               ...post,
-              statusData: statusDataMap[post.id] || {}
+              statusData: statusDataMap[post.id] || {},
             }));
-            
+
             setPosts(postsWithStatus);
             addLogEntry("INFO", "Posts fetched with status data", {
               count: postsWithStatus.length,
-              statusDataCount: Object.keys(statusDataMap).length
+              statusDataCount: Object.keys(statusDataMap).length,
             });
           } else {
             // ステータスデータ取得失敗時は通常のpostsを使用
             setPosts(postsFromSheet);
-            addLogEntry("WARN", "Failed to fetch status data, using default posts");
+            addLogEntry(
+              "WARN",
+              "Failed to fetch status data, using default posts",
+            );
           }
         } catch (error) {
           // エラー時は通常のpostsを使用
@@ -240,7 +243,7 @@ const Home = () => {
       } else {
         setPosts(postsFromSheet);
       }
-      
+
       setSheetError(""); // Clear any existing errors
       fetchRetryAttempted.current = false; // Reset retry flag on success
       updateLastRefreshTime();
@@ -276,12 +279,12 @@ const Home = () => {
           // Force logout
           await handleLogout();
           return;
-        }else {
+        } else {
           // リフレッシュ失敗時もエラーメッセージを表示
           setSheetError(
             "Google認証の期限が切れています。再ログインまたは設定の確認をお願いします。",
           );
-          }
+        }
       }
 
       // Set user-friendly error message
@@ -977,7 +980,6 @@ const Home = () => {
           </DropdownMenu>
         </div>
       </header>
-
       {sheetError && (
         <Card className="mb-6 border-red-200 bg-red-50">
           <CardContent className="pt-6">
@@ -987,7 +989,7 @@ const Home = () => {
                 <p className="font-medium">{sheetError}</p>
               </div>
               <div className="flex items-center gap-2">
-                <Button 
+                <Button
                   variant="outline"
                   size="sm"
                   onClick={handleUserSettings}
@@ -995,7 +997,7 @@ const Home = () => {
                 >
                   設定を確認
                 </Button>
-                <Button 
+                <Button
                   variant="outline"
                   size="sm"
                   onClick={handleRefresh}
@@ -1003,7 +1005,7 @@ const Home = () => {
                 >
                   再試行
                 </Button>
-                <Button 
+                <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setSheetError("")}
@@ -1016,7 +1018,6 @@ const Home = () => {
           </CardContent>
         </Card>
       )}
-
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle>投稿一覧</CardTitle>
@@ -1042,23 +1043,6 @@ const Home = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2 mb-4">
-            <Badge variant="outline" className="bg-muted">
-              全て
-            </Badge>
-            <Badge variant="outline">
-              予定: {posts.filter((post) => post.status === "pending").length}
-            </Badge>
-            <Badge variant="outline" className="bg-green-100">
-              送信済: {posts.filter((post) => post.status === "sent").length}
-            </Badge>
-            <Badge variant="outline" className="bg-red-100">
-              失敗: {posts.filter((post) => post.status === "failed").length}
-            </Badge>
-            <Badge variant="outline" className="bg-gray-100">
-              下書き: {posts.filter((post) => post.status === "draft").length}
-            </Badge>
-          </div>
           <PostTable
             posts={posts}
             onEdit={(postId) => handleEditClick(postId)}
@@ -1066,7 +1050,6 @@ const Home = () => {
           />
         </CardContent>
       </Card>
-
       {/* Create Post Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -1086,7 +1069,6 @@ const Home = () => {
           />
         </DialogContent>
       </Dialog>
-
       {/* Edit Post Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -1106,7 +1088,6 @@ const Home = () => {
           )}
         </DialogContent>
       </Dialog>
-
       {/* Logs Dialog */}
       <Dialog open={isLogsDialogOpen} onOpenChange={setIsLogsDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
