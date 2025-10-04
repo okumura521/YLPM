@@ -165,7 +165,7 @@ export default function LoginPage() {
         <CardHeader className="text-center">
           <div className="flex items-center justify-center mb-4">
             <img
-              src="https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=64&h=64&fit=crop&crop=center"
+              src="/logo.jpg"
               alt="YLPM Logo"
               className="w-16 h-16 rounded-lg"
             />
