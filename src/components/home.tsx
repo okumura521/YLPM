@@ -937,9 +937,9 @@ const Home = () => {
         <div className="flex items-center gap-4">
           <Button
             onClick={() => setIsCreateDialogOpen(true)}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-emerald-500 hover:bg-[#62a891]"
           >
-            <PlusIcon size={16} />
+            <PlusIcon size={16} className=" w-[30px] h-[30px]" />
             新規投稿作成
           </Button>
           <Button
