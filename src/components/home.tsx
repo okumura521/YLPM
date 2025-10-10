@@ -45,6 +45,7 @@ import {
   deletePostInGoogleSheet,
   checkGoogleTokenValidity,
   refreshGoogleAccessToken,
+  saveGoogleRefreshToken,
 } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -290,7 +291,7 @@ const Home = () => {
       // Set user-friendly error message
       if (errorMessage.includes("access token")) {
         setSheetError(
-          "Google認証の期限が切れています。再ログインまたは設定の確認をお願いします。",
+          "Google認証の期限が切れています。再ログインをお願いします。",
         );
       } else {
         setSheetError(`データ取得エラー: ${errorMessage}`);
@@ -334,8 +335,86 @@ const Home = () => {
             navigate("/login", { replace: true });
           } else {
             setUser(user);
-            // No longer auto-create sheets on login - redirect to dashboard instead
-            // Users will create sheets manually from the dashboard
+
+            // Save Google refresh token on login
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+
+            addLogEntry(
+              "INFO",
+              "LOGIN - Session Check START / Save Google refresh token on login",
+              {
+                hasSession: !!session,
+                hasUser: !!session?.user,
+                provider: session?.user?.app_metadata?.provider,
+                timestamp: new Date().toISOString(),
+              },
+            );
+
+            addLogEntry(
+              "INFO",
+              "LOGIN - supabase_session_Provider tokens check",
+              {
+                supabase_session_hasProviderToken: !!session?.provider_token,
+                supabase_session_hasProviderRefreshToken:
+                  !!session?.provider_refresh_token,
+                supabase_session_providerTokenPreview: session?.provider_token
+                  ? `${session.provider_token.substring(0, 30)}...`
+                  : "undefined...",
+                supabase_session_providerRefreshTokenPreview:
+                  session?.provider_refresh_token
+                    ? `${session.provider_refresh_token.substring(0, 30)}...`
+                    : "undefined...",
+                supabase_session_providerTokenLength: session?.provider_token
+                  ? session.provider_token.length
+                  : 0,
+                supabase_session_providerRefreshTokenLength:
+                  session?.provider_refresh_token
+                    ? session.provider_refresh_token.length
+                    : 0,
+                supabase_session_expiresAt: session?.expires_at,
+                supabase_session_expiresIn: session?.expires_at
+                  ? `${session.expires_at - Math.floor(Date.now() / 1000)} seconds`
+                  : "unknown",
+              },
+            );
+
+            if (session?.provider_refresh_token) {
+              addLogEntry(
+                "INFO",
+                "LOGIN - Attempting to save refresh token to DB",
+                session.provider_refresh_token,
+              );
+
+              try {
+                await saveGoogleRefreshToken(session.provider_refresh_token);
+
+                addLogEntry(
+                  "INFO",
+                  "LOGIN - Refresh token saved to DB successfully",
+                  {
+                    userId: user.id,
+                    timestamp: new Date().toISOString(),
+                  },
+                );
+              } catch (error) {
+                addLogEntry(
+                  "ERROR",
+                  "LOGIN - Failed to save refresh token to DB",
+                  error,
+                );
+              }
+            } else {
+              addLogEntry(
+                "WARN",
+                "LOGIN - No provider_refresh_token in session",
+                {
+                  supabase_session_hasProviderToken: !!session?.provider_token,
+                  supabase_session_expiresAt: session?.expires_at,
+                },
+              );
+            }
           }
         } catch (error) {
           if (isMounted) {
@@ -366,7 +445,8 @@ const Home = () => {
       if (!isMounted) return;
 
       if (event === "SIGNED_OUT") {
-        // Clear test user session
+        addLogEntry("INFO", "SIGN OUT - Clearing session");
+
         localStorage.removeItem("testUser");
         sheetCreationHandled.current = false;
         tokenRefreshAttempted.current = false;
@@ -374,8 +454,83 @@ const Home = () => {
         navigate("/login", { replace: true });
       } else if (event === "SIGNED_IN" && session?.user) {
         setUser(session.user);
-        // No longer auto-create sheets on login - redirect to dashboard instead
-        // Users will create sheets manually from the dashboard
+
+        addLogEntry(
+          "INFO",
+          "SIGN IN - Session Check START / Listen for auth state changes",
+          {
+            hasSession: !!session,
+            hasUser: !!session?.user,
+            provider: session?.user?.app_metadata?.provider,
+            timestamp: new Date().toISOString(),
+          },
+        );
+
+        addLogEntry(
+          "INFO",
+          "SIGN IN - supabase_session_Provider tokens check",
+          {
+            supabase_session_hasProviderToken: !!session.provider_token,
+            supabase_session_hasProviderRefreshToken:
+              !!session.provider_refresh_token,
+            supabase_session_providerTokenPreview: session.provider_token
+              ? `${session.provider_token.substring(0, 30)}...`
+              : "undefined...",
+            supabase_session_providerRefreshTokenPreview:
+              session.provider_refresh_token
+                ? `${session.provider_refresh_token.substring(0, 30)}...`
+                : "undefined...",
+            supabase_session_providerTokenLength: session.provider_token
+              ? session.provider_token.length
+              : 0,
+            supabase_session_providerRefreshTokenLength:
+              session.provider_refresh_token
+                ? session.provider_refresh_token.length
+                : 0,
+            supabase_session_expiresAt: session.expires_at,
+            supabase_session_expiresIn: session.expires_at
+              ? `${session.expires_at - Math.floor(Date.now() / 1000)} seconds`
+              : "unknown",
+          },
+        );
+
+        // Save Google refresh token on sign in
+        if (session.provider_refresh_token) {
+          addLogEntry(
+            "INFO",
+            "SIGN IN - Attempting to save refresh token to DB",
+            session.provider_refresh_token,
+          );
+
+          try {
+            const { saveGoogleRefreshToken } = await import("@/lib/supabase");
+            await saveGoogleRefreshToken(session.provider_refresh_token);
+
+            addLogEntry(
+              "INFO",
+              "SIGN IN - Refresh token saved to DB successfully",
+              {
+                userId: session.user.id,
+                timestamp: new Date().toISOString(),
+              },
+            );
+          } catch (error) {
+            addLogEntry(
+              "ERROR",
+              "SIGN IN - Failed to save refresh token to DB",
+              error,
+            );
+          }
+        } else {
+          addLogEntry(
+            "WARN",
+            "SIGN IN - No provider_refresh_token in session",
+            {
+              supabase_session_hasProviderToken: !!session.provider_token,
+              supabase_session_expiresAt: session.expires_at,
+            },
+          );
+        }
       }
     });
 
@@ -386,7 +541,7 @@ const Home = () => {
     };
   }, [navigate]);
 
-  // Periodic token check (every 5 minutes)
+  // Periodic token check and logging (every 5 minutes)
   useEffect(() => {
     const interval = setInterval(
       async () => {
@@ -394,14 +549,42 @@ const Home = () => {
           user?.app_metadata?.provider === "google" &&
           !localStorage.getItem("testUser")
         ) {
-          const isValid = await checkGoogleTokenValidityLocal();
-          if (!isValid && !tokenRefreshAttempted.current) {
+          // Log current token status
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const now = Math.floor(Date.now() / 1000);
+
+          addLogEntry("INFO", "PERIODIC CHECK (5min) - Token status", {
+            timestamp: new Date().toISOString(),
+            supabase_session_hasProviderToken: !!session?.provider_token,
+            supabase_session_expiresAt: session?.expires_at,
+            supabase_session_expiresIn: session?.expires_at
+              ? `${session.expires_at - now} seconds`
+              : "unknown",
+            supabase_session_isExpired: session?.expires_at
+              ? session.expires_at < now
+              : "unknown",
+          });
+
+          // Check if token is expired or about to expire (within 5 minutes)
+          if (session?.expires_at && session.expires_at < now + 300) {
+            addLogEntry(
+              "INFO",
+              "PERIODIC CHECK - Token expired or expiring soon, refreshing",
+            );
+
             const result = await refreshGoogleToken(1);
             if (result.shouldLogout) {
               await handleLogout();
             } else if (!result.success) {
               setSheetError(
                 "Google認証の期限が切れています。再ログインしてください。",
+              );
+            } else {
+              addLogEntry(
+                "INFO",
+                "PERIODIC CHECK - Token refreshed successfully",
               );
             }
           }
@@ -411,6 +594,84 @@ const Home = () => {
     ); // 5 minutes
 
     return () => clearInterval(interval);
+  }, [user]);
+
+  // 1-hour check for testing
+  useEffect(() => {
+    const oneHourCheck = setTimeout(
+      async () => {
+        if (
+          user?.app_metadata?.provider === "google" &&
+          !localStorage.getItem("testUser")
+        ) {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const now = Math.floor(Date.now() / 1000);
+
+          addLogEntry("INFO", "1-HOUR CHECK - Token status after 1 hour", {
+            timestamp: new Date().toISOString(),
+            supabase_session_hasProviderToken: !!session?.provider_token,
+            supabase_session_hasProviderRefreshToken:
+              !!session?.provider_refresh_token,
+            supabase_session_expiresAt: session?.expires_at,
+            supabase_session_expiresIn: session?.expires_at
+              ? `${session.expires_at - now} seconds`
+              : "unknown",
+            supabase_session_isExpired: session?.expires_at
+              ? session.expires_at < now
+              : "unknown",
+          });
+
+          // Try to refresh token
+          addLogEntry(
+            "INFO",
+            "1-HOUR CHECK - Attempting token refresh via Edge Function",
+          );
+          const result = await refreshGoogleToken(1);
+
+          if (result.success) {
+            addLogEntry("INFO", "1-HOUR CHECK - Token refresh SUCCESS", {
+              timestamp: new Date().toISOString(),
+            });
+
+            toast({
+              title: "トークン更新成功",
+              description: "1時間後のトークン更新に成功しました",
+            });
+          } else if (result.shouldLogout) {
+            addLogEntry(
+              "ERROR",
+              "1-HOUR CHECK - Token refresh FAILED - Logout required",
+              {
+                timestamp: new Date().toISOString(),
+              },
+            );
+
+            toast({
+              title: "認証エラー",
+              description: "認証の期限が切れました。再ログインしてください。",
+              variant: "destructive",
+            });
+
+            await handleLogout();
+          } else {
+            addLogEntry("ERROR", "1-HOUR CHECK - Token refresh FAILED", {
+              timestamp: new Date().toISOString(),
+            });
+
+            toast({
+              title: "トークン更新失敗",
+              description: "トークンの更新に失敗しました",
+              variant: "destructive",
+            });
+          }
+        }
+      },
+      60 * 60 * 1000,
+    ); // 1 hour
+
+    return () => clearTimeout(oneHourCheck);
   }, [user]);
 
   // Handle Google Sheet creation flow on login with enhanced error handling

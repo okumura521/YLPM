@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { Database } from "@/types/supabase";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -453,7 +452,7 @@ export const createGoogleSheetWithOAuth = async (
                         { userEnteredValue: { stringValue: "予定時刻" } },
                         { userEnteredValue: { stringValue: "ステータス" } },
                         { userEnteredValue: { stringValue: "画像ID" } },
-                        { userEnteredValue: { stringValue: "予備" } },
+                        { userEnteredValue: { stringValue: "予定時刻" } },
                         { userEnteredValue: { stringValue: "予備" } },
                         { userEnteredValue: { stringValue: "削除フラグ" } },
                         { userEnteredValue: { stringValue: "作成日時" } },
@@ -580,33 +579,225 @@ export const createGoogleSheetWithOAuth = async (
 let tokenRefreshAttempts = 0;
 const MAX_REFRESH_ATTEMPTS = 3;
 
-// Refresh Google Access Token with staged error handling
-export const refreshGoogleAccessToken = async (
-  attempt: number = 1,
-): Promise<{ success: boolean; shouldLogout: boolean }> => {
-  if (tokenRefreshInProgress) {
-    addLogEntry("INFO", "Token refresh already in progress, waiting...");
-    // Wait for ongoing refresh to complete
-    let attempts = 0;
-    while (tokenRefreshInProgress && attempts < 10) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      attempts++;
-    }
-    return { success: !tokenRefreshInProgress, shouldLogout: false };
-  }
+// Store provider refresh token in localStorage for persistence
+const PROVIDER_REFRESH_TOKEN_KEY = "ylpm_provider_refresh_token";
 
+// Save provider refresh token to localStorage
+export const saveProviderRefreshToken = (refreshToken: string) => {
   try {
-    tokenRefreshInProgress = true;
-    tokenRefreshAttempts = attempt;
+    localStorage.setItem(PROVIDER_REFRESH_TOKEN_KEY, refreshToken);
+
+    // 保存後に確認
+    const savedToken = localStorage.getItem(PROVIDER_REFRESH_TOKEN_KEY);
+
+    addLogEntry("INFO", "localStorage_Provider refresh token - SAVE ATTEMPT", {
+      tokenPreview: refreshToken
+        ? `${refreshToken.substring(0, 30)}...`
+        : "undefined...",
+      tokenLength: refreshToken ? refreshToken.length : 0,
+      savedSuccessfully: savedToken === refreshToken,
+      savedTokenPreview: savedToken
+        ? `${savedToken.substring(0, 30)}...`
+        : "undefined...",
+    });
+  } catch (error) {
     addLogEntry(
-      "INFO",
-      `Attempting to refresh Google access token (attempt ${attempt}/${MAX_REFRESH_ATTEMPTS})`,
+      "ERROR",
+      "localStorage_Provider refresh token - SAVE FAILED",
+      error,
+    );
+  }
+};
+
+// Get provider refresh token from localStorage
+const getStoredProviderRefreshToken = (): string | null => {
+  try {
+    const token = localStorage.getItem(PROVIDER_REFRESH_TOKEN_KEY);
+
+    addLogEntry("INFO", "localStorage_Provider refresh token - GET ATTEMPT", {
+      hasToken: !!token,
+      tokenPreview: token ? `${token.substring(0, 30)}...` : "undefined...",
+      tokenLength: token ? token.length : 0,
+    });
+
+    return token;
+  } catch (error) {
+    addLogEntry(
+      "ERROR",
+      "localStorage_Provider refresh token - GET FAILED",
+      error,
+    );
+    return null;
+  }
+};
+
+// Clear stored provider refresh token
+export const clearStoredProviderRefreshToken = () => {
+  try {
+    const tokenBeforeClear = localStorage.getItem(PROVIDER_REFRESH_TOKEN_KEY);
+    localStorage.removeItem(PROVIDER_REFRESH_TOKEN_KEY);
+    const tokenAfterClear = localStorage.getItem(PROVIDER_REFRESH_TOKEN_KEY);
+
+    addLogEntry("INFO", "localStorage_Provider refresh token - CLEAR", {
+      hadTokenBefore: !!tokenBeforeClear,
+      hasTokenAfter: !!tokenAfterClear,
+      clearSuccessful: !tokenAfterClear,
+    });
+  } catch (error) {
+    addLogEntry(
+      "ERROR",
+      "localStorage_Provider refresh token - CLEAR FAILED",
+      error,
+    );
+  }
+};
+
+// Store Google refresh token in database (encrypted)
+export const saveGoogleRefreshToken = async (refreshToken: string) => {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("User not authenticated");
+    }
+
+    // Encrypt the refresh token (simple base64 encoding)
+    const encryptedToken = btoa(refreshToken);
+
+    // Save to database
+    const { error } = await supabase.from("user_settings").upsert(
+      {
+        user_id: user.id,
+        google_refresh_token_encrypted: encryptedToken,
+      },
+      {
+        onConflict: "user_id",
+      },
     );
 
-    const refreshResult = await supabase.auth.refreshSession();
+    if (error) {
+      throw error;
+    }
 
-    if (refreshResult.error) {
-      addLogEntry("ERROR", "Failed to refresh session", refreshResult.error);
+    addLogEntry("INFO", "DB_Google refresh token - SAVED", {
+      userId: user.id,
+      tokenLength: refreshToken.length,
+      encryptedLength: encryptedToken.length,
+    });
+  } catch (error) {
+    addLogEntry("ERROR", "DB_Google refresh token - SAVE FAILED", error);
+    throw error;
+  }
+};
+
+// 共有用の Promise
+let refreshPromise: Promise<{
+  success: boolean;
+  shouldLogout: boolean;
+  accessToken?: string;
+}> | null = null;
+
+// Refresh Google Access Token using Edge Function
+export const refreshGoogleAccessToken = async (
+  attempt: number = 1,
+): Promise<{
+  success: boolean;
+  shouldLogout: boolean;
+  accessToken?: string;
+}> => {
+  const MAX_REFRESH_ATTEMPTS = 3;
+
+  // すでにリフレッシュ処理が走っている場合はそれを待つ
+  if (refreshPromise) {
+    addLogEntry("INFO", "Token refresh already in progress, waiting...");
+    return refreshPromise;
+  }
+
+  // 新しいリフレッシュ処理を開始
+  refreshPromise = (async () => {
+    try {
+      const {
+        data: { session: beforeSession },
+      } = await supabase.auth.getSession();
+
+      addLogEntry(
+        "INFO",
+        `REFRESH TOKEN CHECK - Before refresh (attempt ${attempt}/${MAX_REFRESH_ATTEMPTS})`,
+        {
+          attempt: `${attempt}/${MAX_REFRESH_ATTEMPTS}`,
+          supabase_session_hasProviderToken: !!beforeSession?.provider_token,
+          supabase_session_hasProviderRefreshToken:
+            !!beforeSession?.provider_refresh_token,
+          supabase_session_providerTokenPreview: beforeSession?.provider_token
+            ? `${beforeSession.provider_token.substring(0, 30)}...`
+            : "undefined...",
+          expiresAt: beforeSession?.expires_at,
+          expiresIn: beforeSession?.expires_at
+            ? `${beforeSession.expires_at - Math.floor(Date.now() / 1000)} seconds`
+            : "unknown",
+        },
+      );
+
+      addLogEntry("INFO", "REFRESH TOKEN - Calling Edge Function");
+
+      // Edge Function 呼び出し
+      const { data, error } = await supabase.functions.invoke(
+        "supabase-functions-refresh-google-token",
+        {
+          headers: {
+            Authorization: `Bearer ${beforeSession?.access_token}`,
+          },
+        },
+      );
+
+      if (error) {
+        addLogEntry("ERROR", "REFRESH TOKEN - Edge Function call failed", {
+          error,
+          errorMessage: error.message,
+        });
+
+        if (attempt >= MAX_REFRESH_ATTEMPTS) {
+          addLogEntry("ERROR", "Max refresh attempts reached, forcing logout");
+          return { success: false, shouldLogout: true };
+        }
+
+        return { success: false, shouldLogout: false };
+      }
+
+      if (data?.shouldReauth) {
+        addLogEntry("ERROR", "REFRESH TOKEN - Reauth required", data);
+        return { success: false, shouldLogout: true };
+      }
+
+      if (!data?.access_token) {
+        addLogEntry(
+          "ERROR",
+          "REFRESH TOKEN - No access token in response",
+          data,
+        );
+
+        if (attempt >= MAX_REFRESH_ATTEMPTS) {
+          return { success: false, shouldLogout: true };
+        }
+
+        return { success: false, shouldLogout: false };
+      }
+
+      addLogEntry("INFO", "REFRESH TOKEN - Success from Edge Function", {
+        hasAccessToken: !!data.access_token,
+        expiresIn: data.expires_in,
+        tokenType: data.token_type,
+      });
+
+      return {
+        success: true,
+        shouldLogout: false,
+        accessToken: data.access_token,
+      };
+    } catch (error) {
+      addLogEntry("ERROR", "Error refreshing Google access token", error);
 
       if (attempt >= MAX_REFRESH_ATTEMPTS) {
         addLogEntry("ERROR", "Max refresh attempts reached, forcing logout");
@@ -614,39 +805,31 @@ export const refreshGoogleAccessToken = async (
       }
 
       return { success: false, shouldLogout: false };
+    } finally {
+      // 完了後は必ずリセット
+      refreshPromise = null;
     }
+  })();
 
-    if (refreshResult.data?.session?.provider_token) {
-      addLogEntry("INFO", "Google access token refreshed successfully");
-      tokenRefreshAttempts = 0; // Reset on success
-      return { success: true, shouldLogout: false };
-    }
-
-    addLogEntry("WARN", "Session refreshed but no provider token found");
-
-    if (attempt >= MAX_REFRESH_ATTEMPTS) {
-      addLogEntry("ERROR", "Max refresh attempts reached, forcing logout");
-      return { success: false, shouldLogout: true };
-    }
-
-    return { success: false, shouldLogout: false };
-  } catch (error) {
-    addLogEntry("ERROR", "Error refreshing Google access token", error);
-
-    if (attempt >= MAX_REFRESH_ATTEMPTS) {
-      addLogEntry("ERROR", "Max refresh attempts reached, forcing logout");
-      return { success: false, shouldLogout: true };
-    }
-
-    return { success: false, shouldLogout: false };
-  } finally {
-    tokenRefreshInProgress = false;
-  }
+  return refreshPromise;
 };
 
-// Get Google Access Token from Supabase session with auto-refresh
+// Cache for access token
+let cachedAccessToken: string | null = null;
+let cachedTokenExpiry: number = 0;
+
+// Get Google Access Token with caching and auto-refresh
 export const getGoogleAccessToken = async (retryCount = 0): Promise<string> => {
   try {
+    // Check cache first
+    const now = Math.floor(Date.now() / 1000);
+    if (cachedAccessToken && cachedTokenExpiry > now + 60) {
+      addLogEntry("INFO", "Using cached access token", {
+        expiresIn: cachedTokenExpiry - now,
+      });
+      return cachedAccessToken;
+    }
+
     const {
       data: { session },
       error,
@@ -662,25 +845,52 @@ export const getGoogleAccessToken = async (retryCount = 0): Promise<string> => {
       throw new Error("No active session found");
     }
 
-    if (!session.provider_token) {
-      if (retryCount === 0) {
-        addLogEntry("INFO", "No provider token, attempting refresh");
-        const refreshed = await refreshGoogleAccessToken();
-        if (refreshed) {
-          return getGoogleAccessToken(1); // Retry once
-        }
-      }
+    // Try to use provider_token from session first
+    if (
+      session.provider_token &&
+      session.expires_at &&
+      session.expires_at > now + 60
+    ) {
+      cachedAccessToken = session.provider_token;
+      cachedTokenExpiry = session.expires_at;
 
-      addLogEntry("ERROR", "No provider token in session", {
-        sessionExists: !!session,
-        provider: session.user?.app_metadata?.provider,
-        retryCount,
+      addLogEntry("INFO", "Using provider token from session", {
+        expiresIn: session.expires_at - now,
       });
-      throw new Error("No Google access token found in session");
+
+      return session.provider_token;
     }
 
-    addLogEntry("INFO", "Successfully retrieved Google access token");
-    return session.provider_token;
+    // Token expired or not available, refresh it
+    if (retryCount === 0) {
+      addLogEntry(
+        "INFO",
+        "Token expired or unavailable, refreshing via Edge Function",
+      );
+
+      const result = await refreshGoogleAccessToken(1);
+
+      if (result.success && result.accessToken) {
+        // Cache the new token (expires in 1 hour by default)
+        cachedAccessToken = result.accessToken;
+        cachedTokenExpiry = now + 3600;
+
+        addLogEntry("INFO", "Token refreshed successfully", {
+          expiresIn: 3600,
+        });
+
+        return result.accessToken;
+      } else if (result.shouldLogout) {
+        throw new Error("Authentication expired, please login again");
+      }
+    }
+
+    addLogEntry("ERROR", "No valid access token available", {
+      sessionExists: !!session,
+      provider: session.user?.app_metadata?.provider,
+      retryCount,
+    });
+    throw new Error("No Google access token found");
   } catch (error) {
     addLogEntry("ERROR", "Failed to get Google access token", error);
     throw error;

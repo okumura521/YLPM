@@ -19,7 +19,7 @@ function App() {
           <Route path="/settings" element={<UserSettingsPage />} />
           <Route path="/create-sheet" element={<GoogleSheetsCreationPage />} />
         </Routes>
-        {import.meta.env.VITE_TEMPO === "true" && useRoutes(routes)}
+        {/* import.meta.env.VITE_TEMPO === "true" && useRoutes(routes) */}
         <Toaster />
       </>
     </Suspense>

@@ -24,6 +24,7 @@ export type Database = {
           google_drive_folder_id: string | null
           google_drive_folder_name: string | null
           google_drive_folder_url: string | null
+          google_refresh_token_encrypted: string | null
           google_sheet_id: string | null
           google_sheet_url: string | null
           id: string
@@ -39,6 +40,7 @@ export type Database = {
           google_drive_folder_id?: string | null
           google_drive_folder_name?: string | null
           google_drive_folder_url?: string | null
+          google_refresh_token_encrypted?: string | null
           google_sheet_id?: string | null
           google_sheet_url?: string | null
           id?: string
@@ -54,6 +56,7 @@ export type Database = {
           google_drive_folder_id?: string | null
           google_drive_folder_name?: string | null
           google_drive_folder_url?: string | null
+          google_refresh_token_encrypted?: string | null
           google_sheet_id?: string | null
           google_sheet_url?: string | null
           id?: string
