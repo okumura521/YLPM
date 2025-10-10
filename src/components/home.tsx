@@ -313,7 +313,15 @@ const Home = () => {
     const initializeComponent = async () => {
       if (!isMounted) return;
 
-      await fetchPosts();
+    const { data: { session } } = await supabase.auth.getSession();
+    const userIsAuthenticated = !!session?.user;
+
+
+    //  await fetchPosts();
+    if (userIsAuthenticated && isMounted) {
+      await fetchPosts(); // ← 認証後に呼ぶように変更
+    }
+
 
       // Check initial authentication state
       const checkInitialAuth = async () => {

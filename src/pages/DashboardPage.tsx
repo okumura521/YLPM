@@ -67,7 +67,7 @@ export default function DashboardPage() {
               <div>
                 <h1 className="text-xl font-semibold">
                   Yell-lab-PostMate{" "}
-                  <span className="text-sm text-muted-foreground">Ver.0.2</span>
+                  <span className="text-sm text-muted-foreground">Ver.0.4</span>
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   SNS投稿管理システム
@@ -195,6 +195,20 @@ export default function DashboardPage() {
                 <h3 className="text-lg font-semibold mb-4">更新履歴</h3>
                 <div className="space-y-4">
                   {/* この下に更新履歴を追加してください */}
+                  <div className="border-l-4 border-blue-500 pl-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold">開発中</h4>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        Ver.0.4
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      2025年10月
+                    </p>
+                    <ul className="text-sm space-y-1">
+                      <li>• google Acsess token 自動リフレッシュ処理</li>
+                    </ul>
+                  </div>
                   <div className="border-l-4 border-blue-500 pl-4">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-semibold">開発中</h4>

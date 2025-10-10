@@ -178,7 +178,7 @@ export default function LoginPage() {
           <CardDescription>SNS投稿管理システムにログイン</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="email" className="w-full">
+          <Tabs defaultValue="google" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="email">ID・パスワード</TabsTrigger>
               <TabsTrigger value="google">Google</TabsTrigger>
