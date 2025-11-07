@@ -46,6 +46,7 @@ import {
   checkGoogleTokenValidity,
   refreshGoogleAccessToken,
   saveGoogleRefreshToken,
+  triggerImmediatePost,
 } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -962,6 +963,43 @@ const Home = () => {
     }
   };
 
+  const handleImmediatePost = async (postId: string) => {
+    try {
+      addLogEntry("INFO", "Immediate post triggered from UI", { postId });
+
+      const result = await triggerImmediatePost(postId);
+
+      if (result.success) {
+        toast({
+          title: "即時投稿成功",
+          description: "Makeシナリオが起動されました",
+        });
+        // Refresh posts to show updated schedule time
+        await fetchPosts();
+      } else {
+        throw new Error(result.error || "Failed to trigger immediate post");
+      }
+    } catch (error: any) {
+      console.error("Error triggering immediate post:", error);
+      const errorMessage = error?.message || "Unknown error";
+
+      let userFriendlyMessage = "即時投稿の実行に失敗しました";
+      if (errorMessage.includes("Webhook URL not configured")) {
+        userFriendlyMessage =
+          "Webhook URLが設定されていません。設定画面で設定してください。";
+      } else if (errorMessage.includes("access token")) {
+        userFriendlyMessage =
+          "Google認証の期限が切れています。設定を確認してください。";
+      }
+
+      toast({
+        title: "即時投稿エラー",
+        description: userFriendlyMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleEditClick = async (postId: string) => {
     // 投稿IDからベースIDを抽出
     // 例: "1756238641981_x" -> "1756238641981"
@@ -1316,6 +1354,7 @@ const Home = () => {
             posts={posts}
             onEdit={(postId) => handleEditClick(postId)}
             onDelete={handleDeletePost}
+            onImmediatePost={handleImmediatePost}
           />
         </CardContent>
       </Card>
