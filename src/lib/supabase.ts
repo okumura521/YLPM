@@ -2187,6 +2187,66 @@ export const getSelectedAISettings = async () => {
   }
 };
 
+// ===== Make Webhook設定管理機能 =====
+// NOTE: Webhook関連の機能は src/services/webhookService.ts に移動しました
+// 後方互換性のために re-export しています
+export { getMakeWebhookUrl, saveMakeWebhookUrl } from "../services/webhookService";
+
+// 即時投稿をトリガー
+export const triggerImmediatePost = async (postId: string) => {
+  try {
+    // Import webhook service dynamically to avoid circular dependency
+    const { getMakeWebhookUrl, sendWebhook } = await import("../services/webhookService");
+
+    addLogEntry("INFO", "Triggering immediate post", { postId });
+
+    // 1. 予定時刻を現在時刻（JST）に更新
+    const now = new Date();
+    const jstNow = now
+      .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
+      .slice(0, 16);
+
+    const updateResult = await updatePostInGoogleSheet(postId, {
+      scheduleTime: jstNow,
+      status: "pending",
+    });
+
+    if (!updateResult.success) {
+      throw new Error("Failed to update post schedule time");
+    }
+
+    // 2. Make Webhook URLを取得
+    const webhookResult = await getMakeWebhookUrl();
+    if (!webhookResult.success || !webhookResult.webhookUrl) {
+      throw new Error("Make Webhook URL not configured");
+    }
+
+    // 3. Webhookを送信
+    const webhookSendResult = await sendWebhook(
+      webhookResult.webhookUrl,
+      "immediate_post",
+      { post_id: postId }
+    );
+
+    if (!webhookSendResult.success) {
+      throw new Error(webhookSendResult.error || "Failed to send webhook");
+    }
+
+    addLogEntry("INFO", "Immediate post triggered successfully", { postId });
+    return { success: true };
+  } catch (error) {
+    console.error("Error triggering immediate post:", error);
+    addLogEntry("ERROR", "Error triggering immediate post", {
+      postId,
+      error,
+    });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
 // ===== 画像管理機能 =====
 
 // 画像アップロードリストシートを作成・初期化

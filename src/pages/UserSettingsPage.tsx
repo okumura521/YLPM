@@ -34,6 +34,11 @@ import {
   updateSelectedAIService,
   testAIConnection,
 } from "@/lib/supabase";
+import {
+  getMakeWebhookUrl,
+  saveMakeWebhookUrl,
+  testWebhook,
+} from "@/services/webhookService";
 
 const AI_MODELS = {
   OpenAI: [
@@ -98,6 +103,11 @@ export default function UserSettingsPage() {
   const [newAiModel, setNewAiModel] = useState("");
   const [newAiApiToken, setNewAiApiToken] = useState("");
 
+  // Make Webhook settings
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookTesting, setWebhookTesting] = useState(false);
+  const [webhookSaving, setWebhookSaving] = useState(false);
+
   // Load AI settings from Google Sheets
   const loadAISettings = async () => {
     try {
@@ -124,8 +134,21 @@ export default function UserSettingsPage() {
     }
   };
 
+  // Load Webhook URL from Google Sheets
+  const loadWebhookUrl = async () => {
+    try {
+      const result = await getMakeWebhookUrl();
+      if (result.success) {
+        setWebhookUrl(result.webhookUrl || "");
+      }
+    } catch (error) {
+      console.error("Failed to load webhook URL:", error);
+    }
+  };
+
   useEffect(() => {
     loadAISettings();
+    loadWebhookUrl();
   }, []);
 
   // Handle service toggle
@@ -376,6 +399,85 @@ export default function UserSettingsPage() {
     }
   }, [newAiService]);
 
+  // Handle Webhook URL save
+  const handleWebhookSave = async () => {
+    if (!webhookUrl.trim()) {
+      toast({
+        title: "入力エラー",
+        description: "Webhook URLを入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setWebhookSaving(true);
+      const result = await saveMakeWebhookUrl(webhookUrl);
+      if (result.success) {
+        toast({
+          title: "保存完了",
+          description: "Webhook URLが保存されました",
+        });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      toast({
+        title: "保存エラー",
+        description: "Webhook URLの保存に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setWebhookSaving(false);
+    }
+  };
+
+  // Handle Webhook test
+  const handleWebhookTest = async () => {
+    if (!webhookUrl.trim()) {
+      toast({
+        title: "入力エラー",
+        description: "Webhook URLを入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setWebhookTesting(true);
+      toast({
+        title: "テスト送信中",
+        description: "Makeシナリオをトリガーしています...",
+      });
+
+      const result = await testWebhook(webhookUrl);
+
+      if (result.success) {
+        toast({
+          title: "テスト成功",
+          description: "Webhook送信が成功しました。Makeシナリオが起動されました。",
+        });
+      } else {
+        toast({
+          title: "テスト失敗",
+          description: result.error || "Webhook送信に失敗しました",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "テストエラー",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Webhook送信に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setWebhookTesting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -486,6 +588,53 @@ export default function UserSettingsPage() {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Make Webhook Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Make Webhook設定</CardTitle>
+            <CardDescription>
+              即時投稿時にMakeシナリオを起動するWebhook URLを設定します
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="webhook-url">Webhook URL</Label>
+              <Input
+                id="webhook-url"
+                type="url"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://hook.eu2.make.com/..."
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                MakeのWebhookモジュールで生成されたURLを入力してください
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleWebhookSave}
+                disabled={webhookSaving || !webhookUrl.trim()}
+              >
+                {webhookSaving && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                保存
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleWebhookTest}
+                disabled={webhookTesting || !webhookUrl.trim()}
+              >
+                {webhookTesting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                テスト送信
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

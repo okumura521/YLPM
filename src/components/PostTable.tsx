@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MoreHorizontal, Edit, Trash2, RefreshCw } from "lucide-react";
+import { MoreHorizontal, Edit, Trash2, RefreshCw, Send } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +41,7 @@ interface PostTableProps {
   onEdit?: (postId: string) => void;
   onDelete?: (postId: string) => void;
   onRefresh?: (postId: string) => void;
+  onImmediatePost?: (postId: string) => void;
   //  onAutoRefresh?: () => void;
 }
 
@@ -49,6 +50,7 @@ const PostTable: React.FC<PostTableProps> = ({
   onEdit = () => {},
   onDelete = () => {},
   onRefresh = () => {},
+  onImmediatePost = () => {},
   //  onAutoRefresh = () => {},
 }) => {
   const [selectedPosts, setSelectedPosts] = useState<string[]>([]);
@@ -394,6 +396,12 @@ const PostTable: React.FC<PostTableProps> = ({
                                       <RefreshCw className="mr-2 h-4 w-4" />
                                       ステータス更新
                                     </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => onImmediatePost(post.id)}
+                                    >
+                                      <Send className="mr-2 h-4 w-4" />
+                                      即時投稿
+                                    </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </TableCell>
@@ -516,6 +524,12 @@ const PostTable: React.FC<PostTableProps> = ({
                               >
                                 <RefreshCw className="mr-2 h-4 w-4" />
                                 ステータス更新
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => onImmediatePost(post.id)}
+                              >
+                                <Send className="mr-2 h-4 w-4" />
+                                即時投稿
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
