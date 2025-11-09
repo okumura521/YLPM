@@ -33,9 +33,12 @@ import {
   saveAISettings,
   updateSelectedAIService,
   testAIConnection,
+} from "@/lib/supabase";
+import {
   getMakeWebhookUrl,
   saveMakeWebhookUrl,
-} from "@/lib/supabase";
+  testWebhook,
+} from "@/services/webhookService";
 
 const AI_MODELS = {
   OpenAI: [
@@ -447,29 +450,17 @@ export default function UserSettingsPage() {
         description: "Makeシナリオをトリガーしています...",
       });
 
-      // triggerパラメータをクエリパラメータとして追加
-      let testUrl = webhookUrl;
-      const separator = testUrl.includes("?") ? "&" : "?";
-      testUrl = `${testUrl}${separator}trigger=settings_test&timestamp=${new Date().toISOString()}`;
+      const result = await testWebhook(webhookUrl);
 
-      const response = await fetch(testUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}),
-      });
-
-      if (response.ok) {
+      if (result.success) {
         toast({
           title: "テスト成功",
           description: "Webhook送信が成功しました。Makeシナリオが起動されました。",
         });
       } else {
-        const errorText = await response.text();
         toast({
           title: "テスト失敗",
-          description: `ステータス: ${response.status} - ${errorText}`,
+          description: result.error || "Webhook送信に失敗しました",
           variant: "destructive",
         });
       }

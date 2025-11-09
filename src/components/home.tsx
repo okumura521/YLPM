@@ -51,6 +51,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 
 import { handleGoogleSheetCreationFlow } from "@/lib/supabase";
+import { startScheduler, stopScheduler } from "@/services/postScheduler";
 
 interface Post {
   id: string;
@@ -439,6 +440,9 @@ const Home = () => {
 
     initializeComponent();
 
+    // スケジューラーを起動（15分ごとにスケジュール投稿をチェック）
+    startScheduler(15);
+
     // Auto refresh every 5 minutes
     const autoRefreshInterval = setInterval(
       () => {
@@ -547,6 +551,7 @@ const Home = () => {
       isMounted = false;
       clearInterval(autoRefreshInterval);
       subscription.unsubscribe();
+      stopScheduler(); // スケジューラーを停止
     };
   }, [navigate]);
 
