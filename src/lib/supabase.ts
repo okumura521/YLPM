@@ -2313,16 +2313,19 @@ export const triggerImmediatePost = async (postId: string) => {
       throw new Error("Make Webhook URL not configured");
     }
 
-    // 3. Webhookを叩く（空リクエストでOK、シナリオを起動するだけ）
-    const webhookResponse = await fetch(webhookResult.webhookUrl, {
+    // 3. Webhookを叩く（triggerパラメータをクエリパラメータとして追加）
+    let webhookUrl = webhookResult.webhookUrl;
+
+    // 既にクエリパラメータがある場合は&、ない場合は?で追加
+    const separator = webhookUrl.includes("?") ? "&" : "?";
+    webhookUrl = `${webhookUrl}${separator}trigger=immediate_post&timestamp=${new Date().toISOString()}`;
+
+    const webhookResponse = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        trigger: "immediate_post",
-        timestamp: new Date().toISOString(),
-      }),
+      body: JSON.stringify({}),
     });
 
     if (!webhookResponse.ok) {

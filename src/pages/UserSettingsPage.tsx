@@ -447,16 +447,17 @@ export default function UserSettingsPage() {
         description: "Makeシナリオをトリガーしています...",
       });
 
-      const response = await fetch(webhookUrl, {
+      // triggerパラメータをクエリパラメータとして追加
+      let testUrl = webhookUrl;
+      const separator = testUrl.includes("?") ? "&" : "?";
+      testUrl = `${testUrl}${separator}trigger=settings_test&timestamp=${new Date().toISOString()}`;
+
+      const response = await fetch(testUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          test: true,
-          trigger: "settings_test",
-          timestamp: new Date().toISOString(),
-        }),
+        body: JSON.stringify({}),
       });
 
       if (response.ok) {
