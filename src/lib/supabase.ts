@@ -2200,7 +2200,60 @@ export const triggerImmediatePost = async (postId: string) => {
 
     addLogEntry("INFO", "Triggering immediate post", { postId });
 
-    // 1. 予定時刻を現在時刻（JST）に更新
+    // 1. Google Sheetから該当するベースIDの全プラットフォームを取得
+    const settings = await getUserSettings();
+    if (!settings?.google_sheet_id) {
+      throw new Error("Google Sheet not configured");
+    }
+
+    const accessToken = await getGoogleAccessToken();
+    const sheetName = encodeURIComponent("投稿データ");
+
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}?majorDimension=ROWS`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch posts from Google Sheet");
+    }
+
+    const data = await response.json();
+    const rows = data.values || [];
+
+    // ベースIDに一致する全ての行（プラットフォーム）を取得
+    const matchingRows: Array<{ fullId: string; platform: string; rowIndex: number }> = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const fullId = row[0] || "";
+      const isDeleted = row[8] === "TRUE";
+
+      if (isDeleted) continue;
+
+      // fullIdからbaseIdを抽出
+      const baseId = fullId.includes("_") ? fullId.split("_")[0] : fullId;
+
+      if (baseId === postId) {
+        const platform = row[2] || "";
+        matchingRows.push({ fullId, platform, rowIndex: i });
+      }
+    }
+
+    if (matchingRows.length === 0) {
+      throw new Error("No matching posts found in Google Sheet");
+    }
+
+    addLogEntry("INFO", "Found matching platform rows", {
+      postId,
+      count: matchingRows.length,
+      platforms: matchingRows.map(r => r.platform),
+    });
+
+    // 2. 予定時刻を現在時刻（JST）に更新
     const now = new Date();
     const jstNow = now
       .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
@@ -2215,25 +2268,56 @@ export const triggerImmediatePost = async (postId: string) => {
       throw new Error("Failed to update post schedule time");
     }
 
-    // 2. Make Webhook URLを取得
+    // 3. Make Webhook URLを取得
     const webhookResult = await getMakeWebhookUrl();
     if (!webhookResult.success || !webhookResult.webhookUrl) {
       throw new Error("Make Webhook URL not configured");
     }
 
-    // 3. Webhookを送信
-    const webhookSendResult = await sendWebhook(
-      webhookResult.webhookUrl,
-      "immediate_post",
-      { post_id: postId }
-    );
+    // 4. 各プラットフォームごとにWebhookを送信
+    const webhookResults = [];
+    for (const row of matchingRows) {
+      const webhookSendResult = await sendWebhook(
+        webhookResult.webhookUrl,
+        "immediate_post",
+        { post_id: row.fullId } // プラットフォーム名を含む完全なID
+      );
 
-    if (!webhookSendResult.success) {
-      throw new Error(webhookSendResult.error || "Failed to send webhook");
+      webhookResults.push({
+        fullId: row.fullId,
+        platform: row.platform,
+        success: webhookSendResult.success,
+        error: webhookSendResult.error,
+      });
+
+      if (!webhookSendResult.success) {
+        addLogEntry("ERROR", "Failed to send webhook for platform", {
+          fullId: row.fullId,
+          platform: row.platform,
+          error: webhookSendResult.error,
+        });
+      }
     }
 
-    addLogEntry("INFO", "Immediate post triggered successfully", { postId });
-    return { success: true };
+    // 全てのWebhookが成功したかチェック
+    const allSuccess = webhookResults.every(r => r.success);
+    const successCount = webhookResults.filter(r => r.success).length;
+
+    addLogEntry("INFO", "Immediate post webhooks sent", {
+      postId,
+      total: webhookResults.length,
+      success: successCount,
+      failed: webhookResults.length - successCount,
+    });
+
+    if (allSuccess) {
+      return { success: true };
+    } else {
+      return {
+        success: false,
+        error: `Webhook送信に一部失敗しました (成功: ${successCount}/${webhookResults.length})`,
+      };
+    }
   } catch (error) {
     console.error("Error triggering immediate post:", error);
     addLogEntry("ERROR", "Error triggering immediate post", {

@@ -209,6 +209,7 @@ const PostForm: React.FC<PostFormProps> = ({
   const [imageLoadError, setImageLoadError] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [dropboxConnected, setDropboxConnected] = useState<boolean>(false);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
   const {
     register,
@@ -270,6 +271,11 @@ const PostForm: React.FC<PostFormProps> = ({
 
   React.useEffect(() => {
     const initializeForm = async () => {
+      // 既に初期化済みの場合は処理をスキップ
+      if (isInitialized) {
+        return;
+      }
+
       // 編集モードで、post配列またはinitialDataが渡された場合の処理
       const editData = isEditing
         ? post ||
@@ -593,10 +599,13 @@ const PostForm: React.FC<PostFormProps> = ({
         setImageIds([]);
         setImageInfoMap({});
       }
+
+      // 初期化完了フラグを設定
+      setIsInitialized(true);
     };
 
     initializeForm();
-  }, [post, initialData, isEditing]);
+  }, [post, initialData, isEditing, isInitialized]);
 
   // AI 設定の読み込みは、コンポーネントのマウント時に一度だけ実行する
   React.useEffect(() => {
@@ -1443,13 +1452,16 @@ const PostForm: React.FC<PostFormProps> = ({
                     <div className="space-y-2">
                       <Label htmlFor="ai-instruction">AI への指示</Label>
                       <div className="text-sm text-muted-foreground mb-2">
-                        各プラットフォームに合わせてどのように最適化するか指示してください。
+                        各プラットフォームに合わせてどのように最適化するか指示してください
                       </div>
-                      <Input
+                      <Textarea
                         id="ai-instruction"
-                        placeholder="例：カジュアルに、ビジネス向けに、絵文字を使って、詳しく説明して"
+                        placeholder="例：各プラットフォーム事に指示したい場合は、
+                        SNS事に指示をしたい場合は、例：x=〇〇〇、instagram=〇〇〇、facebook=〇〇〇、line=〇〇〇、discord=〇〇〇、wordpress=〇〇〇
+                        としてそれぞれ指示をしてください。"
                         value={aiInstruction}
                         onChange={(e) => setAiInstruction(e.target.value)}
+                        rows={4}
                       />
                     </div>
 
@@ -1577,7 +1589,7 @@ const PostForm: React.FC<PostFormProps> = ({
                   <div className="text-sm text-muted-foreground">
                     投稿内容の下書きを清書してください。プラットフォーム毎に送信タイミングを分けたい場合は、個別スケジュール設定をONにして設定してください。
                     <br />
-                    ※個別スケジュールを設定しない場合は、スケジュール投稿の設定になります。
+                    ※スケジュール投稿する場合はMake側のスケジュール実行の設定が必要です。
                   </div>
                 </div>
                 {selectedPlatforms.map((platform) => {
@@ -1893,7 +1905,7 @@ const PostForm: React.FC<PostFormProps> = ({
             ) : (
               <>
                 <Send className="mr-2 h-4 w-4" />
-                {isEditing ? "投稿を更新" : "確定"}
+                {isEditing ? "投稿を更新" : "保存"}
               </>
             )}
           </Button>
