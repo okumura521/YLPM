@@ -107,7 +107,7 @@ export default function UpdateHistoryPage() {
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  2025年10月
+                  2025年11月
                 </p>
                 <ul className="text-sm space-y-1">
                   <li>•進捗インジゲータ追加 </li>

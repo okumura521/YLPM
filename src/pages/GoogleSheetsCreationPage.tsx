@@ -15,8 +15,11 @@ import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import { HelpButton } from "@/components/ui/HelpButton";
 import {
   getUserSettings,
+  saveUserSettings,
   getGoogleAccessToken,
   createGoogleSheetWithOAuth,
+  recreateGoogleSheetOnly,
+  getGoogleSheetTitle,
   openGoogleDrivePicker,
   createGoogleDriveImageFolder,
   checkDropboxConnection,
@@ -30,6 +33,7 @@ export default function GoogleSheetsCreationPage() {
   const [directoryId, setDirectoryId] = useState("");
   const [createdSheetUrl, setCreatedSheetUrl] = useState("");
   const [settings, setSettings] = useState<any>(null);
+  const [sheetTitle, setSheetTitle] = useState<string>("");
   const { toast } = useToast();
 
   // Check Google connection status
@@ -41,8 +45,22 @@ export default function GoogleSheetsCreationPage() {
         
         // Check Google connection
         try {
-          await getGoogleAccessToken();
+          const accessToken = await getGoogleAccessToken();
           setGoogleConnected(true);
+
+          // Get sheet title if sheet ID exists
+          if (userSettings?.google_sheet_id) {
+            try {
+              const title = await getGoogleSheetTitle(
+                userSettings.google_sheet_id,
+                accessToken,
+              );
+              setSheetTitle(title);
+            } catch (error) {
+              console.error("Failed to get sheet title:", error);
+              setSheetTitle("YLPM Posts Sheet");
+            }
+          }
         } catch (error) {
           setGoogleConnected(false);
         }
@@ -112,11 +130,51 @@ export default function GoogleSheetsCreationPage() {
     }
   };
 
-  const handleChangeSheet = async () => {
-    toast({
-      title: "機能準備中",
-      description: "シート変更機能は準備中です",
-    });
+  const handleRecreateSheet = async () => {
+    if (!googleConnected) {
+      toast({
+        title: "接続エラー",
+        description: "Google連携設定を完了してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const accessToken = await getGoogleAccessToken();
+      const result = await recreateGoogleSheetOnly(
+        accessToken,
+        directoryId || undefined,
+      );
+
+      if (result.success) {
+        setCreatedSheetUrl(result.sheetUrl || "");
+        // Refresh settings to show updated sheet info
+        const updatedSettings = await getUserSettings();
+        setSettings(updatedSettings);
+        // Force a page refresh to update the display
+        window.location.reload();
+        toast({
+          title: "作成完了",
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: "作成エラー",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "作成エラー",
+        description: "Google Sheetの作成に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCreateFolder = async () => {
@@ -138,6 +196,13 @@ export default function GoogleSheetsCreationPage() {
       );
 
       if (result.success) {
+        // Save folder info to user settings
+        await saveUserSettings({
+          googleDriveFolderId: result.folderId,
+          googleDriveFolderName: result.folderName,
+          googleDriveFolderUrl: result.folderUrl,
+        });
+
         // Refresh settings to show updated folder info
         const updatedSettings = await getUserSettings();
         setSettings(updatedSettings);
@@ -165,13 +230,6 @@ export default function GoogleSheetsCreationPage() {
     }
   };
 
-  const handleChangeFolder = async () => {
-    toast({
-      title: "機能準備中",
-      description: "フォルダ変更機能は準���中です",
-    });
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-2xl mx-auto space-y-6">
@@ -190,10 +248,10 @@ export default function GoogleSheetsCreationPage() {
                   alt="YLPM Logo"
                   className="w-12 h-12 rounded-lg object-cover"
                 />
-                <h1 className="text-3xl font-bold">Google Sheets 作成・管理</h1>
+                <h1 className="text-3xl font-bold">投稿データの保存先の作成・管理</h1>
               </div>
               <p className="text-muted-foreground mt-2">
-                SNS投稿管理用のGoogle Sheetを作成します
+                投稿データを保存するGoogle Sheetと、画像を保存するGoogle Driveフォルダ、Dropboxフォルダを作成します
               </p>
             </div>
             <HelpButton
@@ -244,13 +302,7 @@ export default function GoogleSheetsCreationPage() {
                     </p>
                     <div className="space-y-2">
                       <p className="text-sm text-gray-700">
-                        ファイル名:{" "}
-                        {settings.google_sheet_url.includes("YLPM Posts")
-                          ? settings.google_sheet_url
-                              .split("/")
-                              .pop()
-                              ?.split("#")[0] || "YLPM Posts Sheet"
-                          : "YLPM Posts Sheet"}
+                        ファイル名: {sheetTitle || "読み込み中..."}
                       </p>
                       <a
                         href={settings.google_sheet_url}
@@ -352,11 +404,35 @@ export default function GoogleSheetsCreationPage() {
           <CardHeader>
             <CardTitle>新規シート作成</CardTitle>
             <CardDescription>
-              Google
-              Driveのディレクトリを指定して、SNS投稿管理用のシートを作成します
+              Google Driveのディレクトリを指定して、SNS投稿管理用のシートと画像保存用フォルダを作成します
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Info box and Create button moved to top */}
+            <div className="space-y-4">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm font-medium text-blue-900 mb-2">
+                  ℹ️ 「GoogleSheet & Google Driveを作成」を押すと、以下が自動的に作成されます：
+                </p>
+                <ul className="text-sm text-blue-800 space-y-1 ml-4">
+                  <li>• 投稿データを保存するGoogle Sheet</li>
+                  <li>• 画像を保存するGoogle Driveフォルダ</li>
+                </ul>
+              </div>
+
+              <Button
+                onClick={handleCreateSheet}
+                disabled={loading || !googleConnected}
+                className="w-full"
+                size="lg"
+              >
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Sheet className="mr-2 h-4 w-4" />
+                Google Sheet & Driveを作成
+              </Button>
+            </div>
+
+            {/* Directory ID input */}
             <div className="space-y-2">
               <Label htmlFor="directory-id" className="flex items-center gap-2">
                 Google Drive ディレクトリID（オプション）
@@ -373,11 +449,7 @@ export default function GoogleSheetsCreationPage() {
                 placeholder="ディレクトリIDを入力（空白の場合はルートに作成）"
               />
               <div className="text-xs text-muted-foreground space-y-2">
-                <p>
-                  Google
-                  DriveのURLから取得できるディレクトリIDを入力してください。
-                  空白の場合は、マイドライブのルートに作成されます。
-                </p>
+
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded">
                   <p className="font-medium mb-1">フォルダIDの取得方法：</p>
                   <p>
@@ -395,53 +467,32 @@ export default function GoogleSheetsCreationPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Button
-                onClick={handleCreateSheet}
-                disabled={loading || !googleConnected}
-                className="w-full"
-                size="lg"
-              >
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <Sheet className="mr-2 h-4 w-4" />
-                Google Sheet を作成
-              </Button>
+            {/* Other buttons */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button
+                  onClick={handleRecreateSheet}
+                  disabled={loading || !googleConnected}
+                  variant="outline"
+                  className="w-full"
+                  size="lg"
+                >
+                  <Sheet className="mr-2 h-4 w-4" />
+                  GoogleSheetを作り直す
+                </Button>
 
-              <Button
-                onClick={handleChangeSheet}
-                disabled={loading || !googleConnected}
-                variant="outline"
-                className="w-full"
-                size="lg"
-              >
-                <Sheet className="mr-2 h-4 w-4" />
-                シート変更
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <Button
-                onClick={handleCreateFolder}
-                disabled={loading || !googleConnected}
-                variant="secondary"
-                className="w-full"
-                size="lg"
-              >
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <Sheet className="mr-2 h-4 w-4" />
-                新規フォルダ作成
-              </Button>
-
-              <Button
-                onClick={handleChangeFolder}
-                disabled={loading || !googleConnected}
-                variant="outline"
-                className="w-full"
-                size="lg"
-              >
-                <Sheet className="mr-2 h-4 w-4" />
-                フォルダ変更
-              </Button>
+                <Button
+                  onClick={handleCreateFolder}
+                  disabled={loading || !googleConnected}
+                  variant="secondary"
+                  className="w-full"
+                  size="lg"
+                >
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Sheet className="mr-2 h-4 w-4" />
+                  GoogleDriveフォルダを作り直す
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

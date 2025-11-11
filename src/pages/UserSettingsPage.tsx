@@ -609,6 +609,7 @@ export default function UserSettingsPage() {
                 ))}
               </div>
             )}
+                        <CardDescription>トグルボタンをONにして、使用するAIサービスを指定してください。</CardDescription>
           </CardContent>
         </Card>
 

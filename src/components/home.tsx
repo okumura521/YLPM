@@ -990,7 +990,7 @@ const Home = () => {
       console.error("Error triggering immediate post:", error);
       const errorMessage = error?.message || "Unknown error";
 
-      let userFriendlyMessage = "即時投稿の実行に失敗しました";
+      let userFriendlyMessage = "即時投稿の実行に失敗しました。Webhook URLが正しく設定されているか確認してください";
       if (errorMessage.includes("Webhook URL not configured")) {
         userFriendlyMessage =
           "Webhook URLが設定されていません。設定画面で設定してください。";

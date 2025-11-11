@@ -123,12 +123,12 @@ export default function DashboardPage() {
                     content: 'AIサービスの設定とWebhook URLを設定できます。AI機能を使用する場合は、ここでAPIキーを設定してください。',
                   },
                   {
-                    title: 'Google Sheets作成・管理',
+                    title: '投稿データの保存先の作成・管理',
                     content: '投稿データを保存するGoogle Sheetを作成します。初回利用時に必ず作成してください。',
                   },
                   {
                     title: '投稿作成・管理',
-                    content: 'SNS投稿を作成・編集・削除できます。複数のプラットフォームに一括投稿が可能です。',
+                    content: 'SNS投稿を作成・編集・削除できます。複数のプラットフォームに一括投稿の作成・スケジュール設定が可能です。',
                   },
                 ]}
               />
@@ -160,7 +160,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                AI API の設定を行います。
+                AI API 、即時送信用Webhook、表示サイズの設定を行います。
               </p>
             </CardContent>
           </Card>
@@ -173,13 +173,13 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileSpreadsheet className="h-5 w-5" />
-                Google Sheets,Dropbox Folder 作成・管理
+                投稿データの保存先の作成・管理
               </CardTitle>
               <CardDescription>投稿管理シートの作成・管理</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                SNS投稿管理用のGoogle Sheet,Dropbox Folderを新規作成します。
+                Google Sheet,Google Driveフォルダ,Dropbox Folderを新規作成します。
               </p>
             </CardContent>
           </Card>
@@ -212,12 +212,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
-                SNS投稿管理システムへようこそ。まずはGoogle Sheet・Google Drive
-                Folderの作成から初めてください。
-                <br />
-                AI設定は、ユーザ設定ページで行います。
-                <br />
-                Instagramへ投稿する場合はDropbox Folderの作成が必要です。
+                SNS投稿管理システムへようこそ。
                 <br />
               </p>
               {/* YLPM Support Status */}

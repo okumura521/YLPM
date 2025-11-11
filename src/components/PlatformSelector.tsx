@@ -123,8 +123,6 @@ const PlatformSelector: React.FC<PlatformSelectorProps> = ({
 
   return (
     <div className="bg-white rounded-lg p-4 w-full">
-      <h3 className="text-lg font-medium mb-3">Select Target Platforms</h3>
-      
       {!dropboxConnected && (
         <Alert variant="destructive" className="mb-4">
           <AlertTriangle className="h-4 w-4" />
@@ -174,7 +172,7 @@ const PlatformSelector: React.FC<PlatformSelectorProps> = ({
               <span className="text-sm font-medium">{platform.name}</span>
               {platform.characterLimit && (
                 <Badge variant="outline" className="mt-1 text-xs">
-                  {platform.characterLimit} chars
+                  最大{platform.characterLimit}文字
                 </Badge>
               )}
               {isDisabledPlatform && (
@@ -185,10 +183,6 @@ const PlatformSelector: React.FC<PlatformSelectorProps> = ({
             </motion.div>
           );
         })}
-      </div>
-      <div className="mt-4 flex items-center text-sm text-muted-foreground">
-        <Info className="h-4 w-4 mr-1" />
-        <span>Select the platforms where you want to publish your content</span>
       </div>
     </div>
   );

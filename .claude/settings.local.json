@@ -3,7 +3,8 @@
     "allow": [
       "Bash(mkdir:*)",
       "Bash(dir:*)",
-      "Bash(del srcservicespostScheduler.ts)"
+      "Bash(del srcservicespostScheduler.ts)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

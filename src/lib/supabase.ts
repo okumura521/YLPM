@@ -257,6 +257,44 @@ export const clearUserSettingsCache = () => {
   addLogEntry("INFO", "User settings cache cleared");
 };
 
+// Get Google Sheet title from Sheets API
+export const getGoogleSheetTitle = async (
+  sheetId: string,
+  accessToken: string,
+): Promise<string> => {
+  try {
+    addLogEntry("INFO", "Getting Google Sheet title", { sheetId });
+
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=properties.title`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Google Sheets API Error:", errorData);
+      addLogEntry("ERROR", "Failed to get sheet title", errorData);
+      throw new Error(
+        `Failed to get sheet title: ${errorData.error?.message || "Unknown error"}`,
+      );
+    }
+
+    const data = await response.json();
+    const title = data.properties?.title || "Unknown Sheet";
+
+    addLogEntry("INFO", "Successfully retrieved sheet title", { title });
+    return title;
+  } catch (error) {
+    console.error("Error getting sheet title:", error);
+    addLogEntry("ERROR", "Error getting sheet title", error);
+    return "Unknown Sheet";
+  }
+};
+
 // Create Google Drive folder for images
 export const createGoogleDriveImageFolder = async (
   accessToken: string,
@@ -571,6 +609,152 @@ export const createGoogleSheetWithOAuth = async (
         error instanceof Error
           ? error.message
           : "Failed to create Google Sheet",
+    };
+  }
+};
+
+// Recreate Google Sheet only (without creating a new folder)
+export const recreateGoogleSheetOnly = async (
+  accessToken: string,
+  folderId?: string,
+) => {
+  try {
+    addLogEntry("INFO", "Recreating Google Sheet only", { folderId });
+
+    // Create the sheet using Google Sheets API
+    const response = await fetch(
+      "https://sheets.googleapis.com/v4/spreadsheets",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          properties: {
+            title: `YLPM Posts - ${new Date().toISOString().split("T")[0]}`,
+          },
+          sheets: [
+            {
+              properties: {
+                title: "投稿データ",
+              },
+              data: [
+                {
+                  rowData: [
+                    {
+                      values: [
+                        { userEnteredValue: { stringValue: "ID" } },
+                        { userEnteredValue: { stringValue: "投稿内容" } },
+                        {
+                          userEnteredValue: { stringValue: "プラットフォーム" },
+                        },
+                        { userEnteredValue: { stringValue: "予定時刻" } },
+                        { userEnteredValue: { stringValue: "ステータス" } },
+                        { userEnteredValue: { stringValue: "画像ID" } },
+                        { userEnteredValue: { stringValue: "予定時刻" } },
+                        { userEnteredValue: { stringValue: "予備" } },
+                        { userEnteredValue: { stringValue: "削除フラグ" } },
+                        { userEnteredValue: { stringValue: "作成日時" } },
+                        { userEnteredValue: { stringValue: "更新日時" } },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              properties: {
+                title: "画像アップロードリスト",
+              },
+              data: [
+                {
+                  rowData: [
+                    {
+                      values: [
+                        { userEnteredValue: { stringValue: "画像ID" } },
+                        { userEnteredValue: { stringValue: "ファイル名" } },
+                        {
+                          userEnteredValue: {
+                            stringValue: "Googledrive画像URL",
+                          },
+                        },
+                        {
+                          userEnteredValue: { stringValue: "アップロード日時" },
+                        },
+                        { userEnteredValue: { stringValue: "Dropbox画像URL" } },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Google Sheets API Error:", errorData);
+      addLogEntry("ERROR", "Google Sheets API Error", errorData);
+      throw new Error(
+        `Failed to create sheet: ${errorData.error?.message || "Unknown error"}`,
+      );
+    }
+
+    const sheetData = await response.json();
+    const sheetId = sheetData.spreadsheetId;
+    const sheetUrl = sheetData.spreadsheetUrl;
+
+    // If folderId is provided, move the sheet to that folder
+    if (folderId) {
+      try {
+        await fetch(
+          `https://www.googleapis.com/drive/v3/files/${sheetId}?addParents=${folderId}`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          },
+        );
+        addLogEntry("INFO", "Sheet moved to selected folder", {
+          folderId,
+          sheetId,
+        });
+      } catch (moveError) {
+        console.warn("Failed to move sheet to folder:", moveError);
+        addLogEntry("WARN", "Failed to move sheet to folder", moveError);
+      }
+    }
+
+    // Save only sheet info to user settings (preserve existing folder info)
+    await saveUserSettings({
+      googleSheetId: sheetId,
+      googleSheetUrl: sheetUrl,
+    });
+
+    addLogEntry("INFO", "Google Sheet recreated successfully", {
+      sheetId,
+      sheetUrl,
+    });
+
+    return {
+      success: true,
+      sheetId,
+      sheetUrl,
+      message: "Google Sheetを作り直しました",
+    };
+  } catch (error) {
+    console.error("Error recreating Google Sheet:", error);
+    addLogEntry("ERROR", "Error recreating Google Sheet", error);
+    return {
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to recreate Google Sheet",
     };
   }
 };

@@ -5,6 +5,7 @@ import {
   Calendar,
   Clock,
   Send,
+  Save,
   Sparkles,
   Image,
   AlertTriangle,
@@ -1280,7 +1281,12 @@ const PostForm: React.FC<PostFormProps> = ({
   // 進捗ステップの計算
   const getCurrentStep = (): number => {
     if (selectedPlatforms.length === 0) return 1;
-    if (!content && Object.keys(platformContent).length === 0) return 2;
+
+    // Check if BOTH content AND platform content have text (both are required)
+    const hasContent = content && content.trim().length > 0;
+    const hasPlatformContent = Object.values(platformContent).some(val => val && val.trim().length > 0);
+    if (!hasContent || !hasPlatformContent) return 2;
+
     if (imagePreviews.length === 0 && Object.keys(platformImages).every(k => platformImages[k].length === 0)) return 3;
     if (!isScheduled && Object.keys(platformSchedules).every(k => !platformSchedules[k].enabled)) return 4;
     return 5;
@@ -1290,15 +1296,15 @@ const PostForm: React.FC<PostFormProps> = ({
     { id: 1, label: 'プラットフォーム', description: '投稿先を選択' },
     { id: 2, label: '内容入力', description: '投稿文を作成' },
     { id: 3, label: '画像選択', description: '画像を追加（任意）' },
-    { id: 4, label: 'スケジュール', description: '日時を設定' },
+    { id: 4, label: '個別スケジュール設定(任意)', description: '日時を設定（任意）' },
     { id: 5, label: '確認', description: '内容を確認' },
   ];
 
   return (
     <div className="w-full bg-white">
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Progress Indicator - Sticky at top */}
-        <div className="sticky top-0 z-10 bg-white pb-4 mb-4 border-b border-gray-200">
+        <div className="sticky top-0 z-10 bg-white pb-3 mb-3 border-b border-gray-200">
           <ProgressIndicator
             currentStep={getCurrentStep()}
             steps={formSteps}
@@ -1343,7 +1349,7 @@ const PostForm: React.FC<PostFormProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="font-medium text-green-800">AI設定済み</span>
+                <span className="font-normal text-green-800">AI設定済み</span>
               </div>
               <Button
                 variant="outline"
@@ -1355,10 +1361,8 @@ const PostForm: React.FC<PostFormProps> = ({
               </Button>
             </div>
             <div className="mt-2 text-sm text-green-700">
-              <p>サービス: {aiSettings?.ai_service}</p>
-              <p>モデル: {aiSettings?.ai_model}</p>
-              <p>
-                接続状態:{" "}
+              <p>〇サービス: {aiSettings?.ai_service}〇モデル: {aiSettings?.ai_model},
+              〇接続状態:{" "}
                 {aiSettings?.ai_connection_status
                   ? "✓ 接続確認済み"
                   : "⚠ 未確認"}
@@ -1367,12 +1371,10 @@ const PostForm: React.FC<PostFormProps> = ({
           </Card>
         )}
 
-        <div className="space-y-6">
-          <div className="space-y-6">
-            {/* 1. Target Platforms Selection */}
-            <div className="space-y-4">
-              <Label className="text-base font-medium">
-                1. Target Platforms を選択
+        {/* 1. Target Platforms Selection */}
+        <div className="space-y-3">
+              <Label>
+                1. プラットフォーム を選択
               </Label>
               {isEditing ? (
                 <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
@@ -1408,221 +1410,220 @@ const PostForm: React.FC<PostFormProps> = ({
               )}
             </div>
 
-            {/* 2. Content Draft */}
-            <div className="space-y-2">
-              <Label htmlFor="content">2. 投稿内容の下書き</Label>
-              <div className="text-sm text-muted-foreground mb-2">
-                投稿内容を入力してください。下記の「投稿内容転記ボタン」でプラットフォーム別投稿内容に転記・上書きできます。
+        {/* 2. Content Draft */}
+        <div className="space-y-2">
+          <Label htmlFor="content">2. 投稿内容の下書き</Label>
+          <div className="text-sm text-muted-foreground mb-1">
+            投稿内容を入力してください。下記の「投稿内容転記ボタン」でプラットフォーム別投稿内容に転記・上書きできます。
+          </div>
+          <Textarea
+            id="content"
+            placeholder="投稿内容を入力してください..."
+            className="min-h-[120px]"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              const newPlatformContent = { ...platformContent };
+              selectedPlatforms.forEach((platform) => {
+                newPlatformContent[platform] = content;
+              });
+              setPlatformContent(newPlatformContent);
+              toast({
+                title: "転記完了",
+                description:
+                  "投稿内容をプラットフォーム別設定に転記しました",
+              });
+            }}
+            disabled={!content.trim() || selectedPlatforms.length === 0}
+            className="w-full bg-green-100 hover:bg-green-200 text-green-800 border-green-300"
+          >
+            投稿内容転記ボタン（プラットフォーム別投稿内容に転記・上書き）
+          </Button>
+        </div>
+
+        {/* 3. AI Assistant Section */}
+        <Card className="p-3 border-2 border-dashed border-blue-200">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>
+                3. AIアシスタント（オプション）
+              </Label>
+              <div className="text-sm text-muted-foreground">
+                {aiConfigured
+                  ? "AI生成する場合は、ベース投稿内容・キーワードとAI への指示を入力して、プラットフォーム別生成ボタンを押してください。"
+                  : "AI設定が未設定のため利用できません"}
               </div>
-              <Textarea
-                id="content"
-                placeholder="投稿内容を入力してください..."
-                className="min-h-[120px]"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  const newPlatformContent = { ...platformContent };
-                  selectedPlatforms.forEach((platform) => {
-                    newPlatformContent[platform] = content;
-                  });
-                  setPlatformContent(newPlatformContent);
-                  toast({
-                    title: "転記完了",
-                    description:
-                      "投稿内容をプラットフォーム別設定に転記しました",
-                  });
-                }}
-                disabled={!content.trim() || selectedPlatforms.length === 0}
-                className="w-full bg-green-100 hover:bg-green-200 text-green-800 border-green-300"
-              >
-                投稿内容転記ボタン（プラットフォーム別投稿内容に転記・上書き）
-              </Button>
             </div>
 
-            {/* 3. AI Assistant Section */}
-            <Card className="p-4 border-2 border-dashed border-blue-200">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-base font-medium">
-                    3. AIアシスタント（オプション）
+            {aiConfigured ? (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="ai-base-content">
+                    ベース投稿内容・キーワード
                   </Label>
-                  <div className="text-sm text-muted-foreground">
-                    {aiConfigured
-                      ? "AI生成する場合は、ベース投稿内容・キーワードとAI への指示を入力して、プラットフォーム別生成ボタンを押してください。"
-                      : "AI設定が未設定のため利用できません"}
-                  </div>
+                  <Textarea
+                    id="ai-base-content"
+                    placeholder="例：新商品の紹介、イベント告知、キーワードなど...AIが生成する際の基となる内容やキーワードを入力してください。"
+                    className="min-h-[100px]"
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                  />
                 </div>
 
-                {aiConfigured ? (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-base-content">
-                        ベース投稿内容・キーワード
-                      </Label>
-                      <div className="text-sm text-muted-foreground mb-2">
-                        AIが生成する際の基となる内容やキーワードを入力してください。
-                      </div>
-                      <Textarea
-                        id="ai-base-content"
-                        placeholder="例：新商品の紹介、イベント告知、キーワードなど..."
-                        className="min-h-[100px]"
-                        value={aiPrompt}
-                        onChange={(e) => setAiPrompt(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-instruction">AI への指示</Label>
-                      <div className="text-sm text-muted-foreground mb-2">
-                        各プラットフォームに合わせてどのように最適化するか指示してください
-                      </div>
-                      <Textarea
-                        id="ai-instruction"
-                        placeholder="例：各プラットフォーム事に指示したい場合は、
-                        SNS事に指示をしたい場合は、例：x=〇〇〇、instagram=〇〇〇、facebook=〇〇〇、line=〇〇〇、discord=〇〇〇、wordpress=〇〇〇
-                        としてそれぞれ指示をしてください。"
-                        value={aiInstruction}
-                        onChange={(e) => setAiInstruction(e.target.value)}
-                        rows={4}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Button
-                        type="button"
-                        onClick={generateAIDraft}
-                        disabled={
-                          isGeneratingDraft ||
-                          !aiPrompt ||
-                          !aiInstruction ||
-                          selectedPlatforms.length === 0
-                        }
-                        className="w-full bg-blue-600 hover:bg-blue-700"
-                      >
-                        {isGeneratingDraft ? (
-                          <>
-                            <motion.div
-                              animate={{ rotate: 360 }}
-                              transition={{
-                                duration: 1,
-                                repeat: Infinity,
-                                ease: "linear",
-                              }}
-                              className="mr-2"
-                            >
-                              <Clock size={16} />
-                            </motion.div>
-                            AIコンテンツ生成中...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles size={16} className="mr-2" />
-                            プラットフォーム別生成ボタン
-                          </>
-                        )}
-                      </Button>
-                      <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
-                        ※ボタンを押下すると、プラットフォーム別設定の投稿内容が上書きされるので、下書き等書き込んでいる場合は、別場所に保存するなどしてください。
-                      </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-instruction">AI への指示</Label>
+                  <div className="text-sm text-muted-foreground mb-1 space-y-1">
+                    <p>各プラットフォームに合わせてどのように最適化するか指示してください</p>
+                    <div className="p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+                      <p className="font-medium mb-1">プラットフォーム別に指示する場合の記入例：</p>
+                      <p className="font-mono">x=カジュアルな口調で, instagram=絵文字多めで, facebook=丁寧な説明で, line=親しみやすく, discord=フレンドリーに, wordpress=詳しく説明して</p>
                     </div>
                   </div>
-                ) : (
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
-                    <p className="text-sm text-muted-foreground text-center">
-                      AI設定を完了すると利用可能になります
-                    </p>
-                  </div>
-                )}
-              </div>
-            </Card>
+                  <Textarea
+                    id="ai-instruction"
+                    placeholder=""
+                    value={aiInstruction}
+                    onChange={(e) => setAiInstruction(e.target.value)}
+                    rows={4}
+                  />
+                </div>
 
-            {/* 4. Select Images */}
-            <div className="space-y-2">
-              <Label htmlFor="manual-image-select">
-                4. 投稿したい画像を選択
-              </Label>
-              <div className="text-sm text-muted-foreground mb-2">
-                投稿に使用する画像を選択してください。
-                <br />
-                ※プラットフォーム毎に投稿する画像は下部のプラットフォーム別設定で選択してください。
-              </div>
-              <div className="flex items-center gap-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    document.getElementById("image-input")?.click()
-                  }
-                >
-                  <Image className="mr-2 h-4 w-4" />+ 画像追加
-                </Button>
-                <input
-                  id="image-input"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleImageSelect}
-                  className="hidden"
-                />
-                {imagePreviews.length > 0 && (
-                  <div className="text-sm text-muted-foreground">
-                    {imagePreviews.length}枚選択済み
-                  </div>
-                )}
-              </div>
-              {imagePreviews.length > 0 && (
-                <div className="mt-2 grid grid-cols-4 gap-2">
-                  {imagePreviews.map(
-                    (
-                      previewData,
-                      index, // previewData を使用
-                    ) => (
-                      <div key={previewData.id} className="relative">
-                        {" "}
-                        {/* key を previewData.id に変更 */}
-                        <img
-                          src={convertDriveUrl(previewData.previewUrl)} // previewData.previewUrl を使用
-                          alt={`Preview ${index + 1}`}
-                          className="w-full h-20 object-cover rounded-md"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute top-1 right-1 h-6 w-6 p-0"
-                          onClick={() => removeImage(index)}
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    onClick={generateAIDraft}
+                    disabled={
+                      isGeneratingDraft ||
+                      !aiPrompt ||
+                      !aiInstruction ||
+                      selectedPlatforms.length === 0
+                    }
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isGeneratingDraft ? (
+                      <>
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{
+                            duration: 1,
+                            repeat: Infinity,
+                            ease: "linear",
+                          }}
+                          className="mr-2"
                         >
-                          ×
-                        </Button>
-                      </div>
-                    ),
-                  )}
+                          <Clock size={16} />
+                        </motion.div>
+                        AIコンテンツ生成中...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={16} className="mr-2" />
+                        プラットフォーム別生成ボタン
+                      </>
+                    )}
+                  </Button>
+                  <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
+                    ※生成ボタンを押下すると、下のプラットフォーム別設定の投稿内容に上書します。
+                  </div>
                 </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                <p className="text-sm text-muted-foreground text-center">
+                  AI設定を完了すると利用可能になります
+                </p>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* 4. Select Images */}
+        <div className="space-y-2">
+          <Label htmlFor="manual-image-select">
+            4. 投稿したい画像を選択
+          </Label>
+          <div className="text-sm text-muted-foreground mb-1">
+            投稿に使用する画像を選択してください。
+            <br />
+            ※プラットフォーム毎に投稿する画像は下部のプラットフォーム別設定で選択してください。
+          </div>
+          <div className="flex items-center gap-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                document.getElementById("image-input")?.click()
+              }
+            >
+              <Image className="mr-2 h-4 w-4" />+ 画像追加
+            </Button>
+            <input
+              id="image-input"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleImageSelect}
+              className="hidden"
+            />
+            {imagePreviews.length > 0 && (
+              <div className="text-sm text-muted-foreground">
+                {imagePreviews.length}枚選択済み
+              </div>
+            )}
+          </div>
+          {imagePreviews.length > 0 && (
+            <div className="mt-2 grid grid-cols-4 gap-2">
+              {imagePreviews.map(
+                (
+                  previewData,
+                  index, // previewData を使用
+                ) => (
+                  <div key={previewData.id} className="relative">
+                    {" "}
+                    {/* key を previewData.id に変更 */}
+                    <img
+                      src={convertDriveUrl(previewData.previewUrl)} // previewData.previewUrl を使用
+                      alt={`Preview ${index + 1}`}
+                      className="w-full h-20 object-cover rounded-md"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="absolute top-1 right-1 h-6 w-6 p-0"
+                      onClick={() => removeImage(index)}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ),
               )}
             </div>
+          )}
+        </div>
 
-            {/* 5. Platform-specific Content and Settings */}
-            {selectedPlatforms.length > 0 && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-base font-medium">
-                    5. プラットフォーム別設定
-                  </Label>
-                  <div className="text-sm text-muted-foreground">
-                    投稿内容の下書きを清書してください。プラットフォーム毎に送信タイミングを分けたい場合は、個別スケジュール設定をONにして設定してください。
-                    <br />
-                    ※スケジュール投稿する場合はMake側のスケジュール実行の設定が必要です。
-                  </div>
-                </div>
-                {selectedPlatforms.map((platform) => {
-                  const validation =
-                    platformValidations[
-                      platform as keyof typeof platformValidations
-                    ];
+        {/* 5. Platform-specific Content and Settings */}
+        {selectedPlatforms.length > 0 && (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>
+                5. プラットフォーム別設定
+              </Label>
+              <div className="text-sm text-muted-foreground">
+                投稿内容の下書きを清書してください。プラットフォーム毎に送信タイミングを分けたい場合は、個別スケジュール設定をONにして設定してください。
+                <br />
+                ※個別スケジュール設定しない場合は、現在時刻が設定されます。
+              </div>
+            </div>
+            {selectedPlatforms.map((platform) => {
+              const validation =
+                platformValidations[
+                  platform as keyof typeof platformValidations
+                ];
                   const platformContentValue = platformContent[platform] || "";
                   const platformSchedule = platformSchedules[platform] || {
                     date: "",
@@ -1818,10 +1819,8 @@ const PostForm: React.FC<PostFormProps> = ({
                     </Card>
                   );
                 })}
-              </div>
-            )}
           </div>
-        </div>
+        )}
 
         {/* Validation Alerts */}
         {hasValidationErrors && (
@@ -1953,7 +1952,7 @@ const PostForm: React.FC<PostFormProps> = ({
                     </>
                   ) : (
                     <>
-                      <Send className="mr-2 h-4 w-4" />
+                      <Save className="mr-2 h-4 w-4" />
                       {isEditing ? "投稿を更新" : "保存"}
                     </>
                   )}

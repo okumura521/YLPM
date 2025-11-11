@@ -58,7 +58,7 @@ export function HelpButton({ pageTitle, sections, className }: HelpButtonProps) 
 
             <div className="pt-4 border-t">
               <p className="text-sm text-muted-foreground">
-                さらに詳しい情報が必要な場合は、サポートチームにお問い合わせください。
+                さらに詳しい情報が必要な場合は、Discord 「No135時短&効率改善になるデジタルツールを作って地域の活動に貢献しよう！」チャンネルにお問い合わせください。
               </p>
             </div>
           </div>
