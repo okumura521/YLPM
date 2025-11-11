@@ -11,25 +11,56 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 import { Settings, FileSpreadsheet, PlusCircle, LogOut, History } from "lucide-react";
+import { OnboardingGuide } from "@/components/OnboardingGuide";
+import { HelpButton } from "@/components/ui/HelpButton";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
+    let isMounted = true;
+
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        navigate("/login");
-      } else {
-        setUser(user);
+      try {
+        setLoading(true);
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!isMounted) return;
+
+        if (!user) {
+          navigate("/login");
+        } else {
+          setUser(user);
+        }
+      } catch (error) {
+        console.error("Error getting user:", error);
+        if (isMounted) {
+          toast({
+            title: "エラー",
+            description: "ユーザー情報の取得に失敗しました",
+            variant: "destructive",
+          });
+          navigate("/login");
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
+
     getUser();
-  }, [navigate]);
+
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 初回マウント時のみ実行
 
   const handleLogout = async () => {
     try {
@@ -44,23 +75,29 @@ export default function DashboardPage() {
     }
   };
 
-  if (!user) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div>読み込み中...</div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          <div>読み込み中...</div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Onboarding Guide */}
+      <OnboardingGuide />
+
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
               <img
-                src="/logo.jpg"
+                src="/YLPM.png"
                 alt="YLPM Logo"
                 className="w-10 h-10 rounded-lg object-cover"
               />
@@ -78,6 +115,23 @@ export default function DashboardPage() {
               <Button variant="outline" size="sm" onClick={() => navigate("/")}>
                 ホーム
               </Button>
+              <HelpButton
+                pageTitle="ダッシュボード"
+                sections={[
+                  {
+                    title: 'ユーザー設定',
+                    content: 'AIサービスの設定とWebhook URLを設定できます。AI機能を使用する場合は、ここでAPIキーを設定してください。',
+                  },
+                  {
+                    title: 'Google Sheets作成・管理',
+                    content: '投稿データを保存するGoogle Sheetを作成します。初回利用時に必ず作成してください。',
+                  },
+                  {
+                    title: '投稿作成・管理',
+                    content: 'SNS投稿を作成・編集・削除できます。複数のプラットフォームに一括投稿が可能です。',
+                  },
+                ]}
+              />
               <span className="text-sm text-muted-foreground">
                 {user.email}
               </span>

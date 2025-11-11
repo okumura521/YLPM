@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -169,7 +169,7 @@ export default function LoginPage() {
         <CardHeader className="text-center">
           <div className="flex items-center justify-center mb-4">
             <img
-              src="/logo.jpg"
+              src="/YLPM.png"
               alt="YLPM Logo"
               className="w-16 h-16 rounded-lg"
             />
@@ -229,6 +229,15 @@ export default function LoginPage() {
           </Tabs>
         </CardContent>
       </Card>
+      <div className="mt-6 text-center text-sm text-muted-foreground">
+        <Link to="/privacy-policy" className="hover:underline">
+          プライバシーポリシー
+        </Link>
+        {" | "}
+        <Link to="/terms-of-service" className="hover:underline">
+          利用規約
+        </Link>
+      </div>
     </div>
   );
 }

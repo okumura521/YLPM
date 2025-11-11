@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,6 +28,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader2, CheckCircle, XCircle, Edit, Plus } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
+import { HelpButton } from "@/components/ui/HelpButton";
+import { useFontSize } from "@/contexts/FontSizeContext";
 import {
   getAISettings,
   saveAISettings,
@@ -85,6 +88,7 @@ export default function UserSettingsPage() {
   const [loadingSettings, setLoadingSettings] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { fontSize, compactMode, setFontSize, setCompactMode } = useFontSize();
 
   // AI settings list
   const [aiSettingsList, setAiSettingsList] = useState<AISettingItem[]>([]);
@@ -492,7 +496,7 @@ export default function UserSettingsPage() {
           <div className="text-center flex-1">
             <div className="flex items-center justify-center gap-3 mb-4">
               <img
-                src="/logo.jpg"
+                src="/YLPM.png"
                 alt="YLPM Logo"
                 className="w-12 h-12 rounded-lg object-cover"
               />
@@ -500,6 +504,23 @@ export default function UserSettingsPage() {
             </div>
             <p className="text-muted-foreground mt-2">ユーザ設定を行います</p>
           </div>
+          <HelpButton
+            pageTitle="ユーザー設定"
+            sections={[
+              {
+                title: 'AI連携設定',
+                content: 'AIサービス（OpenAI、Anthropic、Google）のAPIキーを設定します。複数のAIサービスを登録でき、投稿作成時に選択して使用できます。',
+              },
+              {
+                title: 'APIトークンの取得方法',
+                content: '各AIサービスの公式サイトでアカウントを作成し、APIキーを取得してください。入力欄の横にある「？」アイコンから各サービスのAPIキー取得ページにアクセスできます。',
+              },
+              {
+                title: 'Webhook URL設定',
+                content: '即時投稿機能を使用する場合は、Make.comのWebhook URLを設定してください。Make.comでシナリオを作成し、Webhookモジュールから取得したURLを入力します。',
+              },
+            ]}
+          />
         </div>
 
         {/* AI Settings */}
@@ -601,7 +622,17 @@ export default function UserSettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="webhook-url">Webhook URL</Label>
+              <Label htmlFor="webhook-url" className="flex items-center gap-2">
+                Webhook URL
+                <HelpTooltip
+                  title="Webhook URLとは？"
+                  description="Webhook URLは、即時投稿時にMake.comのシナリオを起動するためのURLです。
+Make.comでWebhookモジュールを追加すると自動生成されます。"
+                  links={[
+                    { label: "Make.com", url: "https://www.make.com/" }
+                  ]}
+                />
+              </Label>
               <Input
                 id="webhook-url"
                 type="url"
@@ -638,6 +669,75 @@ export default function UserSettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Display Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>表示設定</CardTitle>
+            <CardDescription>
+              文字サイズやレイアウトの表示設定を変更できます
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Font Size */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2">
+                  文字サイズ
+                  <HelpTooltip
+                    description="画面全体の文字サイズを変更します。見やすさに合わせて調整してください。"
+                  />
+                </Label>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant={fontSize === 'small' ? 'default' : 'outline'}
+                  onClick={() => setFontSize('small')}
+                  className="flex-1"
+                >
+                  小
+                </Button>
+                <Button
+                  variant={fontSize === 'medium' ? 'default' : 'outline'}
+                  onClick={() => setFontSize('medium')}
+                  className="flex-1"
+                >
+                  中
+                </Button>
+                <Button
+                  variant={fontSize === 'large' ? 'default' : 'outline'}
+                  onClick={() => setFontSize('large')}
+                  className="flex-1"
+                >
+                  大
+                </Button>
+              </div>
+            </div>
+
+            {/* Compact Mode */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="compact-mode">コンパクト表示</Label>
+                  <HelpTooltip
+                    description="余白を減らして、より多くの情報を一度に表示します。"
+                  />
+                </div>
+                <Switch
+                  id="compact-mode"
+                  checked={compactMode}
+                  onCheckedChange={setCompactMode}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {compactMode
+                  ? '現在、コンパクト表示が有効です。余白が狭くなります。'
+                  : '現在、標準表示です。ゆったりとしたレイアウトです。'
+                }
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Navigation Button */}
         <div className="flex justify-between items-center">
           <Button variant="outline" onClick={() => navigate("/dashboard")}>
@@ -654,7 +754,13 @@ export default function UserSettingsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-ai-model">モデル</Label>
+              <Label htmlFor="edit-ai-model" className="flex items-center gap-2">
+                モデル
+                <HelpTooltip
+                  description="AIサービスが提供するモデルを選択します。
+より新しいモデルほど高性能ですが、料金も高くなる傾向があります。"
+                />
+              </Label>
               <Select value={editAiModel} onValueChange={setEditAiModel}>
                 <SelectTrigger>
                   <SelectValue placeholder="モデルを選択" />
@@ -672,7 +778,19 @@ export default function UserSettingsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-ai-api-token">APIトークン</Label>
+              <Label htmlFor="edit-ai-api-token" className="flex items-center gap-2">
+                APIトークン
+                <HelpTooltip
+                  title="APIトークンとは？"
+                  description="APIトークンは、AIサービスにアクセスするための認証キーです。
+各AIサービスの公式サイトから取得できます。"
+                  links={[
+                    { label: "OpenAI API Keys", url: "https://platform.openai.com/api-keys" },
+                    { label: "Anthropic Console", url: "https://console.anthropic.com/" },
+                    { label: "Google AI Studio", url: "https://aistudio.google.com/apikey" }
+                  ]}
+                />
+              </Label>
               <PasswordInput
                 id="edit-ai-api-token"
                 value={editAiApiToken}
@@ -706,7 +824,13 @@ export default function UserSettingsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="new-ai-service">AIサービス</Label>
+              <Label htmlFor="new-ai-service" className="flex items-center gap-2">
+                AIサービス
+                <HelpTooltip
+                  description="投稿文の生成に使用するAIサービスを選択します。
+OpenAI、Anthropic、Googleから選択できます。"
+                />
+              </Label>
               <Select value={newAiService} onValueChange={setNewAiService}>
                 <SelectTrigger>
                   <SelectValue placeholder="AIサービスを選択" />
@@ -719,7 +843,13 @@ export default function UserSettingsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new-ai-model">モデル</Label>
+              <Label htmlFor="new-ai-model" className="flex items-center gap-2">
+                モデル
+                <HelpTooltip
+                  description="AIサービスが提供するモデルを選択します。
+より新しいモデルほど高性能ですが、料金も高くなる傾向があります。"
+                />
+              </Label>
               <Select
                 value={newAiModel}
                 onValueChange={setNewAiModel}
@@ -741,7 +871,19 @@ export default function UserSettingsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new-ai-api-token">APIトークン</Label>
+              <Label htmlFor="new-ai-api-token" className="flex items-center gap-2">
+                APIトークン
+                <HelpTooltip
+                  title="APIトークンとは？"
+                  description="APIトークンは、AIサービスにアクセスするための認証キーです。
+各AIサービスの公式サイトから取得できます。"
+                  links={[
+                    { label: "OpenAI API Keys", url: "https://platform.openai.com/api-keys" },
+                    { label: "Anthropic Console", url: "https://console.anthropic.com/" },
+                    { label: "Google AI Studio", url: "https://aistudio.google.com/apikey" }
+                  ]}
+                />
+              </Label>
               <PasswordInput
                 id="new-ai-api-token"
                 value={newAiApiToken}
@@ -774,6 +916,17 @@ export default function UserSettingsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Footer */}
+      <div className="mt-8 pb-6 text-center text-sm text-muted-foreground">
+        <Link to="/privacy-policy" className="hover:underline">
+          プライバシーポリシー
+        </Link>
+        {" | "}
+        <Link to="/terms-of-service" className="hover:underline">
+          利用規約
+        </Link>
+      </div>
     </div>
   );
 }

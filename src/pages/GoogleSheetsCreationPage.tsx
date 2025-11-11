@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, CheckCircle, XCircle, Sheet } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
+import { HelpButton } from "@/components/ui/HelpButton";
 import {
   getUserSettings,
   getGoogleAccessToken,
@@ -184,7 +186,7 @@ export default function GoogleSheetsCreationPage() {
             <div className="flex-1">
               <div className="flex items-center justify-center gap-3 mb-4">
                 <img
-                  src="/logo.jpg"
+                  src="/YLPM.png"
                   alt="YLPM Logo"
                   className="w-12 h-12 rounded-lg object-cover"
                 />
@@ -194,7 +196,23 @@ export default function GoogleSheetsCreationPage() {
                 SNS投稿管理用のGoogle Sheetを作成します
               </p>
             </div>
-            <div className="w-20"></div>
+            <HelpButton
+              pageTitle="Google Sheets作成・管理"
+              sections={[
+                {
+                  title: 'Google Sheetの作成',
+                  content: '投稿データを保存するためのGoogle Sheetを作成します。初回利用時に必ず作成してください。シートには投稿ID、内容、送信先プラットフォーム、スケジュール日時などが保存されます。',
+                },
+                {
+                  title: 'ディレクトリIDについて',
+                  content: 'Google Driveの特定のフォルダ内にシートを作成したい場合は、フォルダのIDを指定します。フォルダIDはGoogle DriveのURLから取得できます。空白の場合は、マイドライブのルートに作成されます。',
+                },
+                {
+                  title: 'Dropbox連携',
+                  content: 'Instagram投稿には画像のDropbox連携が必要です。Dropbox連携を行うと、画像がDropboxに保存され、Instagramからアクセスできるようになります。',
+                },
+              ]}
+            />
           </div>
         </div>
 
@@ -340,8 +358,13 @@ export default function GoogleSheetsCreationPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="directory-id">
+              <Label htmlFor="directory-id" className="flex items-center gap-2">
                 Google Drive ディレクトリID（オプション）
+                <HelpTooltip
+                  title="ディレクトリIDとは？"
+                  description="Google Driveの特定のフォルダ内にシートを作成したい場合に、フォルダのIDを指定します。
+空白の場合は、マイドライブのルートに作成されます。"
+                />
               </Label>
               <Input
                 id="directory-id"

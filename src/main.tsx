@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { BrowserRouter } from "react-router-dom";
+import { FontSizeProvider } from "./contexts/FontSizeContext";
 
 /* import { TempoDevtools } from 'tempo-devtools'; [deprecated] */
 /* TempoDevtools.init() [deprecated] */ const basename = import.meta.env
@@ -10,6 +11,8 @@ import { BrowserRouter } from "react-router-dom";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <BrowserRouter basename={basename}>
-    <App />
+    <FontSizeProvider>
+      <App />
+    </FontSizeProvider>
   </BrowserRouter>,
 );

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(dir:*)",
+      "Bash(del srcservicespostScheduler.ts)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

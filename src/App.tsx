@@ -6,6 +6,8 @@ import DashboardPage from "./pages/DashboardPage";
 import UserSettingsPage from "./pages/UserSettingsPage";
 import GoogleSheetsCreationPage from "./pages/GoogleSheetsCreationPage";
 import UpdateHistoryPage from "./pages/UpdateHistoryPage";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
+import TermsOfServicePage from "./pages/TermsOfServicePage";
 import { Toaster } from "@/components/ui/toaster";
 import routes from "tempo-routes";
 
@@ -20,6 +22,8 @@ function App() {
           <Route path="/settings" element={<UserSettingsPage />} />
           <Route path="/create-sheet" element={<GoogleSheetsCreationPage />} />
           <Route path="/update-history" element={<UpdateHistoryPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms-of-service" element={<TermsOfServicePage />} />
         </Routes>
         {/* import.meta.env.VITE_TEMPO === "true" && useRoutes(routes) */}
         <Toaster />
