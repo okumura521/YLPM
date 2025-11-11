@@ -104,7 +104,7 @@ export default function DashboardPage() {
               <div>
                 <h1 className="text-xl font-semibold">
                   Yell-lab-PostMate{" "}
-                  <span className="text-sm text-muted-foreground">Ver.0.4</span>
+                  <span className="text-sm text-muted-foreground">Ver.0.5</span>
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   SNS投稿管理システム

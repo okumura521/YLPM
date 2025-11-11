@@ -101,6 +101,22 @@ export default function UpdateHistoryPage() {
               {/* この下に更新履歴を追加してください */}
               <div className="border-l-4 border-blue-500 pl-4">
                 <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold">エールラボえひめ内公開</h4>
+                  <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                    Ver.0.5
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  2025年10月
+                </p>
+                <ul className="text-sm space-y-1">
+                  <li>•進捗インジゲータ追加 </li>
+                  <li>• プライバシーポリシー、利用規約追加</li>
+                  <li>• Webhook即時送信機能送信</li>
+                </ul>
+              </div>
+              <div className="border-l-4 border-blue-500 pl-4">
+                <div className="flex items-center justify-between mb-2">
                   <h4 className="font-semibold">開発中</h4>
                   <span className="text-xs bg-gray-100 px-2 py-1 rounded">
                     Ver.0.4
