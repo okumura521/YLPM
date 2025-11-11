@@ -1356,7 +1356,7 @@ const Home = () => {
       </Card>
       {/* Create Post Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>新規投稿作成</DialogTitle>
           </DialogHeader>
@@ -1375,7 +1375,7 @@ const Home = () => {
       </Dialog>
       {/* Edit Post Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>投稿編集</DialogTitle>
           </DialogHeader>

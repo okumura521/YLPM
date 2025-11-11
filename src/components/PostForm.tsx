@@ -1297,8 +1297,8 @@ const PostForm: React.FC<PostFormProps> = ({
   return (
     <div className="w-full bg-white">
       <div className="space-y-6">
-        {/* Progress Indicator */}
-        <div className="mb-8">
+        {/* Progress Indicator - Sticky at top */}
+        <div className="sticky top-0 z-10 bg-white pb-4 mb-4 border-b border-gray-200">
           <ProgressIndicator
             currentStep={getCurrentStep()}
             steps={formSteps}
