@@ -28,6 +28,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AlertTriangle } from "lucide-react";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import PostForm from "./PostForm";
 import {
   supabase,
@@ -1232,7 +1239,7 @@ const Home = () => {
             ダッシュボード
           </Button>
           <img
-            src="/logo.jpg"
+            src="/YLPM.png"
             alt="YLPM Logo"
             className="w-12 h-12 rounded-lg object-cover"
           />
@@ -1242,21 +1249,40 @@ const Home = () => {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <Button
-            onClick={() => setIsCreateDialogOpen(true)}
-            className="flex items-center gap-2 bg-emerald-500 hover:bg-[#62a891]"
-          >
-            <PlusIcon size={16} className=" w-[30px] h-[30px]" />
-            新規投稿作成
-          </Button>
-          <Button
-            onClick={handleShowLogs}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            <FileText size={16} />
-            ログ確認
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => setIsCreateDialogOpen(true)}
+                  className="flex items-center gap-2 bg-emerald-500 hover:bg-[#62a891]"
+                >
+                  <PlusIcon size={16} className=" w-[30px] h-[30px]" />
+                  新規投稿作成
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>新しいSNS投稿を作成します。複数のプラットフォームに一括投稿できます。</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleShowLogs}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <FileText size={16} />
+                  ログ確認
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>システムの動作ログを確認できます</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Avatar className="cursor-pointer hover:opacity-80">
@@ -1288,42 +1314,12 @@ const Home = () => {
         </div>
       </header>
       {sheetError && (
-        <Card className="mb-6 border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-red-800 flex-1">
-                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                <p className="font-medium">{sheetError}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleUserSettings}
-                  className="text-red-700 border-red-300 hover:bg-red-100"
-                >
-                  設定を確認
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefresh}
-                  className="text-red-700 border-red-300 hover:bg-red-100"
-                >
-                  再試行
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSheetError("")}
-                  className="text-red-700 hover:bg-red-100"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="mb-6">
+          <ErrorAlert
+            error={sheetError}
+            onDismiss={() => setSheetError("")}
+          />
+        </div>
       )}
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between pb-2">

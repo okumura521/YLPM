@@ -32,6 +32,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ProgressIndicator } from "@/components/ui/ProgressIndicator";
 
 // Import PlatformSelector directly
 import PlatformSelector from "./PlatformSelector";
@@ -1276,9 +1277,34 @@ const PostForm: React.FC<PostFormProps> = ({
     return match ? `https://lh3.googleusercontent.com/d/${match[0]}` : url;
   };
 
+  // 進捗ステップの計算
+  const getCurrentStep = (): number => {
+    if (selectedPlatforms.length === 0) return 1;
+    if (!content && Object.keys(platformContent).length === 0) return 2;
+    if (imagePreviews.length === 0 && Object.keys(platformImages).every(k => platformImages[k].length === 0)) return 3;
+    if (!isScheduled && Object.keys(platformSchedules).every(k => !platformSchedules[k].enabled)) return 4;
+    return 5;
+  };
+
+  const formSteps = [
+    { id: 1, label: 'プラットフォーム', description: '投稿先を選択' },
+    { id: 2, label: '内容入力', description: '投稿文を作成' },
+    { id: 3, label: '画像選択', description: '画像を追加（任意）' },
+    { id: 4, label: 'スケジュール', description: '日時を設定' },
+    { id: 5, label: '確認', description: '内容を確認' },
+  ];
+
   return (
     <div className="w-full bg-white">
       <div className="space-y-6">
+        {/* Progress Indicator */}
+        <div className="mb-8">
+          <ProgressIndicator
+            currentStep={getCurrentStep()}
+            steps={formSteps}
+          />
+        </div>
+
         {/* AI Settings Status */}
         {loadingAiSettings ? (
           <Card className="p-4">
@@ -1845,70 +1871,99 @@ const PostForm: React.FC<PostFormProps> = ({
 
         {/* Form Action Buttons */}
         <div className="flex justify-end space-x-2 p-4">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            キャンセル
-          </Button>
-          <Button
-            type="button"
-            onClick={() => handleFormSubmit(true)}
-            variant="secondary"
-            disabled={
-              selectedPlatforms.length === 0 ||
-              isGeneratingDraft ||
-              isSubmitting
-            }
-          >
-            {isSubmitting ? (
-              <>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{
-                    duration: 1,
-                    repeat: Infinity,
-                    ease: "linear",
-                  }}
-                  className="mr-2"
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="button" variant="outline" onClick={onCancel}>
+                  キャンセル
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>編集内容を破棄して閉じます</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  onClick={() => handleFormSubmit(true)}
+                  variant="secondary"
+                  disabled={
+                    selectedPlatforms.length === 0 ||
+                    isGeneratingDraft ||
+                    isSubmitting
+                  }
                 >
-                  <Clock size={16} />
-                </motion.div>
-                処理中...
-              </>
-            ) : (
-              "下書き保存"
-            )}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => handleFormSubmit(false)}
-            disabled={
-              selectedPlatforms.length === 0 ||
-              isGeneratingDraft ||
-              hasValidationErrors ||
-              isSubmitting
-            }
-          >
-            {isSubmitting ? (
-              <>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{
-                    duration: 1,
-                    repeat: Infinity,
-                    ease: "linear",
-                  }}
-                  className="mr-2"
+                  {isSubmitting ? (
+                    <>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 1,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                        className="mr-2"
+                      >
+                        <Clock size={16} />
+                      </motion.div>
+                      処理中...
+                    </>
+                  ) : (
+                    "下書き保存"
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>投稿を下書きとして保存します（投稿は実行されません）</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  onClick={() => handleFormSubmit(false)}
+                  disabled={
+                    selectedPlatforms.length === 0 ||
+                    isGeneratingDraft ||
+                    hasValidationErrors ||
+                    isSubmitting
+                  }
                 >
-                  <Clock size={16} />
-                </motion.div>
-                処理中...
-              </>
-            ) : (
-              <>
-                <Send className="mr-2 h-4 w-4" />
-                {isEditing ? "投稿を更新" : "保存"}
-              </>
-            )}
-          </Button>
+                  {isSubmitting ? (
+                    <>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 1,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                        className="mr-2"
+                      >
+                        <Clock size={16} />
+                      </motion.div>
+                      処理中...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      {isEditing ? "投稿を更新" : "保存"}
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isEditing ? "投稿内容を更新します" : "投稿をスケジュール予定として保存します"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
     </div>

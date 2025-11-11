@@ -1,6 +1,7 @@
 import * as React from "react"
 import { ChevronLeftIcon, ChevronRightIcon } from "@radix-ui/react-icons"
 import { DayPicker } from "react-day-picker"
+import { ja } from 'date-fns/locale'
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
@@ -15,6 +16,7 @@ function Calendar({
 }: CalendarProps) {
   return (
     <DayPicker
+      locale={ja}
       showOutsideDays={showOutsideDays}
       className={cn("p-3", className)}
       classNames={{
