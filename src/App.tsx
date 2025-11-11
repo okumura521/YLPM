@@ -5,6 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import UserSettingsPage from "./pages/UserSettingsPage";
 import GoogleSheetsCreationPage from "./pages/GoogleSheetsCreationPage";
+import UpdateHistoryPage from "./pages/UpdateHistoryPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import TermsOfServicePage from "./pages/TermsOfServicePage";
 import { Toaster } from "@/components/ui/toaster";
@@ -20,6 +21,7 @@ function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/settings" element={<UserSettingsPage />} />
           <Route path="/create-sheet" element={<GoogleSheetsCreationPage />} />
+          <Route path="/update-history" element={<UpdateHistoryPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/terms-of-service" element={<TermsOfServicePage />} />
         </Routes>
