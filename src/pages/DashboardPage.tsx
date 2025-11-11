@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
-import { Settings, FileSpreadsheet, PlusCircle, LogOut } from "lucide-react";
+import { Settings, FileSpreadsheet, PlusCircle, LogOut, History } from "lucide-react";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
@@ -190,94 +190,16 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
-              {/* Update History Section */}
+              {/* Update History Link */}
               <div className="mt-6">
-                <h3 className="text-lg font-semibold mb-4">更新履歴</h3>
-                <div className="space-y-4">
-                  {/* この下に更新履歴を追加してください */}
-                  <div className="border-l-4 border-blue-500 pl-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold">開発中</h4>
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                        Ver.0.4
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      2025年10月
-                    </p>
-                    <ul className="text-sm space-y-1">
-                      <li>• google Acsess token 自動リフレッシュ処理</li>
-                    </ul>
-                  </div>
-                  <div className="border-l-4 border-blue-500 pl-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold">開発中</h4>
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                        Ver.0.3
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      2025年9月
-                    </p>
-                    <ul className="text-sm space-y-1">
-                      <li>• PF事の画像割り当て処理修正</li>
-                      <li>• 送信中ステータス追加</li>
-                      <li>• 投稿一覧表示更新</li>
-                    </ul>
-                  </div>
-                  <div className="border-l-4 border-blue-500 pl-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold">開発中</h4>
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                        Ver.0.2
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      2025年8月
-                    </p>
-                    <ul className="text-sm space-y-1">
-                      <li>• AI複数サービス登録機能追加</li>
-                      <li>
-                        • インスタグラム投稿画像用Dropbox Folder連携機能追加
-                      </li>
-                    </ul>
-                  </div>
-                  <div className="border-l-4 border-blue-500 pl-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold">開発中</h4>
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                        Ver.0.1
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      2025年8月
-                    </p>
-                    <ul className="text-sm space-y-1">
-                      <li>• 画像UPload機能修正</li>
-                      <li>• 新規登録・編集ページ修正</li>
-                    </ul>
-                  </div>
-                  {/* 更新履歴フォーマット*/}
-                  <div className="border-l-4 border-blue-500 pl-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold">開発中</h4>
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                        Ver.0
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      2025年8月
-                    </p>
-                    <ul className="text-sm space-y-1">
-                      <li>• SNS投稿作成・管理機能</li>
-                      <li>• Google Sheets連携</li>
-                      <li>• AI生成機能</li>
-                      <li>• 複数プラットフォーム対応</li>
-                      <li>• スケジュール投稿機能</li>
-                    </ul>
-                  </div>
-                  {/* 更新履歴ここまで */}
-                </div>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2"
+                  onClick={() => navigate("/update-history")}
+                >
+                  <History className="h-5 w-5" />
+                  更新履歴を見る
+                </Button>
               </div>
             </CardContent>
           </Card>
