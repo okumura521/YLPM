@@ -3,12 +3,6 @@ import { Check, Info, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { cn } from "@/lib/utils";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -146,85 +140,49 @@ const PlatformSelector: React.FC<PlatformSelectorProps> = ({
           const isDisabledPlatform = platform.requiresDropbox && !dropboxConnected;
 
           return (
-            <TooltipProvider key={platform.id}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <motion.div
-                    whileHover={{ scale: isDisabledPlatform ? 1 : 1.03 }}
-                    whileTap={{ scale: isDisabledPlatform ? 1 : 0.98 }}
-                    className={cn(
-                      "relative flex flex-col items-center justify-center p-4 rounded-lg border-2 cursor-pointer transition-all",
-                      isSelected
-                        ? "border-primary bg-primary/10"
-                        : "border-gray-200 hover:border-gray-300",
-                      (disabled || isDisabledPlatform) && "opacity-60 cursor-not-allowed",
-                    )}
-                    onClick={() => handleTogglePlatform(platform.id)}
-                  >
-                    {isSelected && (
-                      <div className="absolute top-2 right-2">
-                        <Check className="h-4 w-4 text-primary" />
-                      </div>
-                    )}
-                    {isDisabledPlatform && (
-                      <div className="absolute top-2 left-2">
-                        <AlertTriangle className="h-4 w-4 text-red-500" />
-                      </div>
-                    )}
-                    <div
-                      className={cn(
-                        "w-10 h-10 rounded-full flex items-center justify-center mb-2",
-                        platform.color,
-                      )}
-                    >
-                      {platform.icon}
-                    </div>
-                    <span className="text-sm font-medium">{platform.name}</span>
-                    {platform.characterLimit && (
-                      <Badge variant="outline" className="mt-1 text-xs">
-                        {platform.characterLimit} chars
-                      </Badge>
-                    )}
-                    {isDisabledPlatform && (
-                      <Badge variant="destructive" className="mt-1 text-xs">
-                        Dropbox必須
-                      </Badge>
-                    )}
-                  </motion.div>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
-                  <div>
-                    <p className="font-medium">{platform.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {platform.description}
-                    </p>
-                    {platform.characterLimit && (
-                      <p className="text-xs mt-1">
-                        Character limit: {platform.characterLimit}
-                      </p>
-                    )}
-                    {platform.fileTypes && platform.fileTypes.length > 0 && (
-                      <p className="text-xs mt-1">
-                        Supported files: {platform.fileTypes.join(", ")}
-                      </p>
-                    )}
-                    {platform.maxImages !== undefined && (
-                      <p className="text-xs mt-1">
-                        画像:{" "}
-                        {platform.maxImages === null
-                          ? "制限なし"
-                          : `最大${platform.maxImages}枚`}
-                      </p>
-                    )}
-                    {platform.requiresDropbox && (
-                      <p className="text-xs mt-1 text-red-600">
-                        ※Dropbox連携が必要です
-                      </p>
-                    )}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <motion.div
+              key={platform.id}
+              whileHover={{ scale: isDisabledPlatform ? 1 : 1.03 }}
+              whileTap={{ scale: isDisabledPlatform ? 1 : 0.98 }}
+              className={cn(
+                "relative flex flex-col items-center justify-center p-4 rounded-lg border-2 cursor-pointer transition-all",
+                isSelected
+                  ? "border-primary bg-primary/10"
+                  : "border-gray-200 hover:border-gray-300",
+                (disabled || isDisabledPlatform) && "opacity-60 cursor-not-allowed",
+              )}
+              onClick={() => handleTogglePlatform(platform.id)}
+            >
+              {isSelected && (
+                <div className="absolute top-2 right-2">
+                  <Check className="h-4 w-4 text-primary" />
+                </div>
+              )}
+              {isDisabledPlatform && (
+                <div className="absolute top-2 left-2">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                </div>
+              )}
+              <div
+                className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center mb-2",
+                  platform.color,
+                )}
+              >
+                {platform.icon}
+              </div>
+              <span className="text-sm font-medium">{platform.name}</span>
+              {platform.characterLimit && (
+                <Badge variant="outline" className="mt-1 text-xs">
+                  {platform.characterLimit} chars
+                </Badge>
+              )}
+              {isDisabledPlatform && (
+                <Badge variant="destructive" className="mt-1 text-xs">
+                  Dropbox必須
+                </Badge>
+              )}
+            </motion.div>
           );
         })}
       </div>
