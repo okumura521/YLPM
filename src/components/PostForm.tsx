@@ -549,7 +549,6 @@ const PostForm: React.FC<PostFormProps> = ({
               if (!newSelectedPlatforms.includes(platform)) {
                 newSelectedPlatforms.push(platform);
               }
-              debugger;
               // プラットフォームごとのスケジュールを設定
               const platformScheduleKey = p.id ? `${p.id}_${platform.toLowerCase()}` : platform;
               const platformScheduleTime = p.scheduleTimeData?.[platformScheduleKey] || p.scheduleTime;
@@ -565,17 +564,6 @@ const PostForm: React.FC<PostFormProps> = ({
                   enabled: true,
                 };
               }
-
-//              if (p.scheduleTime) {
-//                const scheduleDate = new Date(p.scheduleTime);
-                // Convert to JST for display
-//                const jstDate = new Date(scheduleDate.getTime());
-//                newPlatformSchedules[platform] = {
-//                  date: jstDate.toISOString().split("T")[0],
-//                  time: jstDate.toTimeString().slice(0, 5),
-//                  enabled: true,
-//                };
-//              }
 
               // 画像IDを設定
               if (p.imageIds) {
@@ -1078,34 +1066,7 @@ const PostForm: React.FC<PostFormProps> = ({
         });
       }
 
-      // 既存の画像IDと、今回アップロードされた新規画像のIDを統合
-//      const selectedExistingImageIds: string[] = [];
-//      selectedPlatforms.forEach((platform) => {
-//        const platformSelectedImages = platformImages[platform] || [];
-//        platformSelectedImages.forEach((previewData) => {
-//          if (previewData.type === "existing" && previewData.id) {
-//            selectedExistingImageIds.push(previewData.id);
-//          }
-//        });
-//      });
-//      const uniqueSelectedExistingImageIds = [
-//        ...new Set(selectedExistingImageIds),
-//        ...new Set(imageIds),
-//      ];
-
-//      const allImageIds = [...uniqueSelectedExistingImageIds, ...newImageIds];
-//
-//      // 編集時の画像ID管理を改善
-//      addLogEntry("INFO", "Image ID management for submission", {
-//        existingImageIdsFromState: imageIds, // 初期状態のimageIds
-//        selectedExistingImageIds: uniqueSelectedExistingImageIds, // 今回選択された既存画像ID
-//        newUploadedImageIds: newImageIds, // 今回アップロードされた新規画像のID
-//        finalAllImageIds: allImageIds, // 最終的に投稿に紐づく画像ID
-//        isEditing: isEditing,
-//        selectedPlatforms: selectedPlatforms,
-//      });
-
-    // プラットフォームごとの画像IDマップを作成
+      // プラットフォームごとの画像IDマップを作成
     const platformImageIdsMap: Record<string, string[]> = {};
 
     selectedPlatforms.forEach((platform) => {
@@ -1152,9 +1113,7 @@ const PostForm: React.FC<PostFormProps> = ({
         isEditing,
         selectedPlatforms,
         originalId: isEditing ? post?.[0]?.id : undefined,
-//        allImageIdsForDebug: allImageIds,
         newlyUploadedImageIdsForDebug: newImageIds,
-//        selectedExistingImageIdsForDebug: uniqueSelectedExistingImageIds,
       });
 
       // 変更: 編集時も新規登録時と同様に、各プラットフォームごとにデータを保存
@@ -1204,7 +1163,6 @@ const PostForm: React.FC<PostFormProps> = ({
           platformContent, // 全プラットフォームの内容を送信
           platformImages: undefined, // DB保存時には使用しない想定
           platformSchedules,
-//          imageIds: allImageIds, // すべての画像IDを渡す
           imageIds: platformImageIdsMap[platform] || [], // プラットフォーム別の画像IDを渡す
           status: isDraft ? "draft" : "pending",
           id: `${baseId}_${platform}`, // IDにプラットフォームサフィックスを付与

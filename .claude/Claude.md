@@ -215,4 +215,174 @@ const handleChangeFolder = async () => {
 
 ---
 
+## 残課題（要対応）
+
+### パフォーマンス最適化: Google Sheets API二重呼び出しの統合
+
+#### 問題
+**場所**: `src/components/home.tsx:168-261`
+
+現在、投稿データ取得時に同じGoogle Sheetに対して2回API呼び出しを行っています：
+1. `fetchPostsFromGoogleSheet()` で投稿データを取得（180行目）
+2. 再度同じシートからステータスデータを取得（183-254行目）
+
+#### 影響
+- APIコール数が2倍になり、レスポンス時間が遅延
+- Google Sheets API割り当ての無駄な消費
+- コード複雑性の増加
+
+#### 修正方法
+
+**180行目**の以下のコード：
+```typescript
+const postsFromSheet = await fetchPostsFromGoogleSheet();
+
+// Google Sheetから全ステータスデータを取得
+const settings = await getUserSettings();
+```
+
+を以下に置き換える：
+
+```typescript
+// 1回のAPI呼び出しで投稿データとステータスデータを取得
+const settings = await getUserSettings();
+if (!settings?.google_sheet_id) {
+  addLogEntry("INFO", "No Google Sheet configured, returning empty array");
+  setPosts([]);
+  updateLastRefreshTime();
+  return;
+}
+
+const accessToken = await getGoogleAccessToken();
+const sheetName = encodeURIComponent("投稿データ");
+
+const response = await fetch(
+  `https://sheets.googleapis.com/v4/spreadsheets/${settings.google_sheet_id}/values/${sheetName}?majorDimension=ROWS`,
+  {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  },
+);
+
+if (!response.ok) {
+  const errorData = await response.json();
+  addLogEntry("ERROR", "Error fetching posts from sheet", errorData);
+  throw new Error(
+    `Failed to fetch posts: ${errorData.error?.message || "Unknown error"}`,
+  );
+}
+
+const data = await response.json();
+const rows = data.values || [];
+
+// 投稿データとステータスデータを同時に構築
+const postsMap = new Map();
+const statusDataMap: Record<string, Record<string, string>> = {};
+
+// Skip header row and process data
+for (let i = 1; i < rows.length; i++) {
+  const row = rows[i];
+  const fullId = row[0] || `sheet-${i}`;
+  const isDeleted = row[8] === "TRUE";
+
+  if (isDeleted) continue;
+
+  const baseId = fullId.includes("_") ? fullId.split("_")[0] : fullId;
+  const platform = row[2];
+  const status = row[4] || "pending";
+
+  // ステータスデータを収集
+  if (platform) {
+    const parts = fullId.split("_");
+    if (parts.length >= 2) {
+      const platformLower = parts.slice(1).join("_").toLowerCase();
+
+      if (!statusDataMap[baseId]) {
+        statusDataMap[baseId] = {};
+      }
+
+      statusDataMap[baseId][`${baseId}_${platformLower}`] = status;
+    }
+  }
+
+  // 投稿データを構築
+  if (!postsMap.has(baseId)) {
+    let scheduleTimeForDisplay =
+      row[3] ||
+      new Date()
+        .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
+        .slice(0, 16);
+    if (row[3] && row[3].includes("T")) {
+      const utcTime = new Date(row[3]);
+      scheduleTimeForDisplay = utcTime
+        .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" })
+        .slice(0, 16);
+    }
+
+    const imageIdsString = row[5] || "";
+    const imageIds = imageIdsString
+      ? imageIdsString
+          .split(",")
+          .map((id) => id.trim())
+          .filter((id) => id)
+      : [];
+
+    postsMap.set(baseId, {
+      id: baseId,
+      content: row[1] || "",
+      platforms: [],
+      scheduleTime: scheduleTimeForDisplay,
+      status: (status as "pending" | "sent" | "failed" | "draft") || "pending",
+      imageIds: imageIds,
+      updatedAt: row[10] || row[9] || new Date().toISOString(),
+      scheduleTimeData: {},
+      statusData: {},
+    });
+  }
+
+  const post = postsMap.get(baseId);
+  if (platform && !post.platforms.includes(platform)) {
+    post.platforms.push(platform);
+  }
+
+  if (platform) {
+    const platformKey = `${baseId}_${platform.toLowerCase()}`;
+    const platformScheduleTime = row[3] || post.scheduleTime;
+    post.scheduleTimeData[platformKey] = platformScheduleTime;
+  }
+}
+
+// postsにstatusDataを追加
+const postsWithStatus = Array.from(postsMap.values()).map((post) => ({
+  ...post,
+  statusData: statusDataMap[post.id] || {},
+}));
+
+setPosts(postsWithStatus);
+setSheetError("");
+fetchRetryAttempted.current = false;
+updateLastRefreshTime();
+addLogEntry("INFO", "Posts fetched with status data in single API call", {
+  count: postsWithStatus.length,
+  statusDataCount: Object.keys(statusDataMap).length,
+});
+```
+
+その後、**183-260行目を削除**する。
+
+#### 期待効果
+- API呼び出し回数: 2回 → 1回（50%削減）
+- レスポンス時間の短縮
+- コードの簡潔化
+
+#### 優先度
+**中** - 機能に影響はないが、パフォーマンス向上が見込める
+
+#### 修正完了済み項目
+✅ PostForm.tsx:551 - デバッグコード（debugger;）削除完了
+✅ PostForm.tsx:568-577, 1081-1105 - コメントアウトコード削除完了
+
+---
+
 **注意**: このファイルは必要に応じて更新してください。
