@@ -77,32 +77,32 @@ export default function DashboardPage() {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-          <div>読み込み中...</div>
+      <div className="min-h-screen ylpm-animated-bg flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 ylpm-bounce-in">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00BCD4]"></div>
+          <div className="text-[#00BCD4] font-semibold">読み込み中...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen ylpm-animated-bg">
       {/* Onboarding Guide */}
       <OnboardingGuide />
 
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="ylpm-glass-card shadow-lg ylpm-fade-in sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
               <img
                 src="/YLPM.png"
                 alt="YLPM Logo"
-                className="w-10 h-10 rounded-lg object-cover"
+                className="w-10 h-10 rounded-lg object-cover ylpm-float"
               />
               <div>
-                <h1 className="text-xl font-semibold">
+                <h1 className="text-xl font-semibold ylpm-section-header">
                   Yell-lab-PostMate{" "}
                   <span className="text-sm text-muted-foreground">Ver.0.5</span>
                 </h1>
@@ -112,8 +112,8 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <Button variant="outline" size="sm" onClick={() => navigate("/")}>
-                ホーム
+              <Button variant="outline" size="sm" onClick={() => navigate("/posts")}>
+                投稿一覧
               </Button>
               <HelpButton
                 pageTitle="ダッシュボード"
@@ -148,7 +148,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* User Settings */}
           <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow"
+            className="cursor-pointer ylpm-glass-card ylpm-slide-in-up transition-all duration-300"
             onClick={() => navigate("/settings")}
           >
             <CardHeader>
@@ -167,7 +167,7 @@ export default function DashboardPage() {
 
           {/* Google Sheets Creation */}
           <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow"
+            className="cursor-pointer ylpm-glass-card ylpm-slide-in-up transition-all duration-300"
             onClick={() => navigate("/create-sheet")}
           >
             <CardHeader>
@@ -186,8 +186,8 @@ export default function DashboardPage() {
 
           {/* Post Creation */}
           <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => navigate("/")}
+            className="cursor-pointer ylpm-glass-card ylpm-slide-in-up transition-all duration-300"
+            onClick={() => navigate("/posts")}
           >
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -205,10 +205,10 @@ export default function DashboardPage() {
         </div>
 
         {/* Welcome Message */}
-        <div className="mt-8">
-          <Card>
+        <div className="mt-8 ylpm-slide-in-up">
+          <Card className="ylpm-glass-card">
             <CardHeader>
-              <CardTitle>ようこそ、YLPM へ</CardTitle>
+              <div className="ylpm-section-header">ようこそ、YLPM へ</div>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">

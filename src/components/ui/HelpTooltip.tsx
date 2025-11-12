@@ -24,7 +24,7 @@ export function HelpTooltip({ title, description, links, className }: HelpToolti
       <Tooltip>
         <TooltipTrigger asChild>
           <Info
-            className={`h-4 w-4 text-muted-foreground cursor-help hover:text-foreground transition-colors ${className || ''}`}
+            className={`h-4 w-4 text-[#00BCD4] cursor-help hover:text-[#00ACC1] transition-all duration-300 hover:scale-110 ${className || ''}`}
             aria-label="ヘルプ情報"
           />
         </TooltipTrigger>

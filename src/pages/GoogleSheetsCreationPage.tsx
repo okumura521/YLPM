@@ -231,9 +231,9 @@ export default function GoogleSheetsCreationPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen ylpm-animated-bg p-4">
       <div className="max-w-2xl mx-auto space-y-6">
-        <div className="text-center">
+        <div className="text-center ylpm-fade-in">
           <div className="flex items-center justify-between mb-4">
             <Button
               variant="outline"
@@ -246,9 +246,9 @@ export default function GoogleSheetsCreationPage() {
                 <img
                   src="/YLPM.png"
                   alt="YLPM Logo"
-                  className="w-12 h-12 rounded-lg object-cover"
+                  className="w-12 h-12 rounded-lg object-cover ylpm-float"
                 />
-                <h1 className="text-3xl font-bold">投稿データの保存先の作成・管理</h1>
+                <h1 className="text-3xl font-bold ylpm-section-header">投稿データの保存先の作成・管理</h1>
               </div>
               <p className="text-muted-foreground mt-2">
                 投稿データを保存するGoogle Sheetと、画像を保存するGoogle Driveフォルダ、Dropboxフォルダを作成します
@@ -275,7 +275,7 @@ export default function GoogleSheetsCreationPage() {
         </div>
 
         {/* Connection Status */}
-        <Card>
+        <Card className="ylpm-glass-card ylpm-slide-in-up">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               Google連携ステータス
@@ -355,7 +355,7 @@ export default function GoogleSheetsCreationPage() {
         </Card>
 
         {/* Dropbox Connection Status */}
-        <Card>
+        <Card className="ylpm-glass-card ylpm-slide-in-up">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               Dropbox連携ステータス
@@ -400,9 +400,9 @@ export default function GoogleSheetsCreationPage() {
         </Card>
 
         {/* Sheet Creation Form */}
-        <Card>
+        <Card className="ylpm-glass-card ylpm-slide-in-up">
           <CardHeader>
-            <CardTitle>新規シート作成</CardTitle>
+            <div className="ylpm-section-header">新規シート作成</div>
             <CardDescription>
               Google Driveのディレクトリを指定して、SNS投稿管理用のシートと画像保存用フォルダを作成します
             </CardDescription>
@@ -423,7 +423,7 @@ export default function GoogleSheetsCreationPage() {
               <Button
                 onClick={handleCreateSheet}
                 disabled={loading || !googleConnected}
-                className="w-full"
+                className="w-full ylpm-btn-gradient ylpm-glow"
                 size="lg"
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -499,9 +499,9 @@ export default function GoogleSheetsCreationPage() {
 
         {/* Created Sheet Info */}
         {createdSheetUrl && (
-          <Card>
+          <Card className="ylpm-glass-card ylpm-bounce-in">
             <CardHeader>
-              <CardTitle className="text-green-600">作成完了</CardTitle>
+              <div className="ylpm-section-header text-green-600">作成完了</div>
             </CardHeader>
             <CardContent className="space-y-4">
               <p>Google Sheetが正常に作成されました。</p>

@@ -1228,8 +1228,8 @@ const Home = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <header className="flex justify-between items-center mb-8">
+    <div className="min-h-screen ylpm-animated-bg p-6">
+      <header className="flex justify-between items-center mb-8 ylpm-fade-in">
         <div className="flex items-center gap-4">
           <Button
             onClick={() => navigate("/dashboard")}
@@ -1241,10 +1241,10 @@ const Home = () => {
           <img
             src="/YLPM.png"
             alt="YLPM Logo"
-            className="w-12 h-12 rounded-lg object-cover"
+            className="w-12 h-12 rounded-lg object-cover ylpm-float"
           />
           <div>
-            <h1 className="text-3xl font-bold">投稿作成・管理</h1>
+            <h1 className="text-3xl font-bold ylpm-section-header">投稿作成・管理</h1>
             <p className="text-muted-foreground">SNS投稿作成＆管理システム</p>
           </div>
         </div>
@@ -1254,7 +1254,7 @@ const Home = () => {
               <TooltipTrigger asChild>
                 <Button
                   onClick={() => setIsCreateDialogOpen(true)}
-                  className="flex items-center gap-2 bg-emerald-500 hover:bg-[#62a891]"
+                  className="flex items-center gap-2 ylpm-btn-gradient ylpm-glow ylpm-pulse"
                 >
                   <PlusIcon size={16} className=" w-[30px] h-[30px]" />
                   新規投稿作成
@@ -1314,16 +1314,16 @@ const Home = () => {
         </div>
       </header>
       {sheetError && (
-        <div className="mb-6">
+        <div className="mb-6 ylpm-slide-in-up">
           <ErrorAlert
             error={sheetError}
             onDismiss={() => setSheetError("")}
           />
         </div>
       )}
-      <Card className="mb-6">
+      <Card className="mb-6 ylpm-glass-card ylpm-slide-in-up">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle>投稿一覧</CardTitle>
+          <div className="ylpm-section-header">投稿一覧</div>
           <div className="flex flex-col items-end gap-2">
             <Button
               variant="outline"
@@ -1356,9 +1356,9 @@ const Home = () => {
       </Card>
       {/* Create Post Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto ylpm-glass-card-modal">
           <DialogHeader>
-            <DialogTitle>新規投稿作成</DialogTitle>
+            <div className="ylpm-section-header">新規投稿作成</div>
           </DialogHeader>
           <PostForm
             onSubmit={async (postData) => {
@@ -1375,9 +1375,9 @@ const Home = () => {
       </Dialog>
       {/* Edit Post Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto ylpm-glass-card-modal">
           <DialogHeader>
-            <DialogTitle>投稿編集</DialogTitle>
+            <div className="ylpm-section-header">投稿編集</div>
           </DialogHeader>
           {currentPost && (
             <PostForm
@@ -1394,10 +1394,10 @@ const Home = () => {
       </Dialog>
       {/* Logs Dialog */}
       <Dialog open={isLogsDialogOpen} onOpenChange={setIsLogsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto ylpm-glass-card-modal">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>アプリケーションログ</span>
+            <div className="flex items-center justify-between">
+              <div className="ylpm-section-header">アプリケーションログ</div>
               <Button
                 onClick={handleClearLogs}
                 variant="outline"
@@ -1407,7 +1407,7 @@ const Home = () => {
                 <Trash2 size={16} />
                 ログクリア
               </Button>
-            </DialogTitle>
+            </div>
           </DialogHeader>
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {logs.length === 0 ? (

@@ -1259,10 +1259,10 @@ const PostForm: React.FC<PostFormProps> = ({
   ];
 
   return (
-    <div className="w-full bg-white">
-      <div className="space-y-4">
+    <div className="w-full ylpm-animated-bg min-h-screen">
+      <div className="space-y-4 ylpm-fade-in">
         {/* Progress Indicator - Sticky at top */}
-        <div className="sticky top-0 z-10 bg-white pb-3 mb-3 border-b border-gray-200">
+        <div className="sticky top-0 z-10 ylpm-glass-card pb-3 mb-3">
           <ProgressIndicator
             currentStep={getCurrentStep()}
             steps={formSteps}
@@ -1271,7 +1271,7 @@ const PostForm: React.FC<PostFormProps> = ({
 
         {/* AI Settings Status */}
         {loadingAiSettings ? (
-          <Card className="p-4">
+          <Card className="p-4 ylpm-glass-card ylpm-bounce-in">
             <div className="flex items-center justify-center">
               <motion.div
                 animate={{ rotate: 360 }}
@@ -1288,7 +1288,7 @@ const PostForm: React.FC<PostFormProps> = ({
             </div>
           </Card>
         ) : !aiConfigured ? (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="ylpm-slide-in-up">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription className="flex items-center justify-between">
               <span>AI機能使用にはAI設定が必要です</span>
@@ -1303,7 +1303,7 @@ const PostForm: React.FC<PostFormProps> = ({
             </AlertDescription>
           </Alert>
         ) : (
-          <Card className="p-4 bg-green-50 border-green-200">
+          <Card className="p-4 ylpm-glass-card ylpm-slide-in-up">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -1330,10 +1330,10 @@ const PostForm: React.FC<PostFormProps> = ({
         )}
 
         {/* 1. Target Platforms Selection */}
-        <div className="space-y-3">
-              <Label>
+        <div className="space-y-3 ylpm-slide-in-up">
+              <div className="ylpm-section-header">
                 1. プラットフォーム を選択
-              </Label>
+              </div>
               {isEditing ? (
                 <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
                   <p className="text-sm text-muted-foreground mb-2">
@@ -1369,8 +1369,8 @@ const PostForm: React.FC<PostFormProps> = ({
             </div>
 
         {/* 2. Content Draft */}
-        <div className="space-y-2">
-          <Label htmlFor="content">2. 投稿内容の下書き</Label>
+        <div className="space-y-2 ylpm-slide-in-up">
+          <div className="ylpm-section-header">2. 投稿内容の下書き</div>
           <div className="text-sm text-muted-foreground mb-1">
             投稿内容を入力してください。下記の「投稿内容転記ボタン」でプラットフォーム別投稿内容に転記・上書きできます。
           </div>
@@ -1383,7 +1383,6 @@ const PostForm: React.FC<PostFormProps> = ({
           />
           <Button
             type="button"
-            variant="outline"
             onClick={() => {
               const newPlatformContent = { ...platformContent };
               selectedPlatforms.forEach((platform) => {
@@ -1397,19 +1396,19 @@ const PostForm: React.FC<PostFormProps> = ({
               });
             }}
             disabled={!content.trim() || selectedPlatforms.length === 0}
-            className="w-full bg-green-100 hover:bg-green-200 text-green-800 border-green-300"
+            className="w-full ylpm-btn-success"
           >
             投稿内容転記ボタン（プラットフォーム別投稿内容に転記・上書き）
           </Button>
         </div>
 
         {/* 3. AI Assistant Section */}
-        <Card className="p-3 border-2 border-dashed border-blue-200">
+        <Card className="p-3 ylpm-glass-card ylpm-slide-in-up">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label>
+              <div className="ylpm-section-header">
                 3. AIアシスタント（オプション）
-              </Label>
+              </div>
               <div className="text-sm text-muted-foreground">
                 {aiConfigured
                   ? "AI生成する場合は、ベース投稿内容・キーワードとAI への指示を入力して、プラットフォーム別生成ボタンを押してください。"
@@ -1460,7 +1459,7 @@ const PostForm: React.FC<PostFormProps> = ({
                       !aiInstruction ||
                       selectedPlatforms.length === 0
                     }
-                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    className="w-full ylpm-btn-orange ylpm-glow-orange"
                   >
                     {isGeneratingDraft ? (
                       <>
@@ -1500,10 +1499,10 @@ const PostForm: React.FC<PostFormProps> = ({
         </Card>
 
         {/* 4. Select Images */}
-        <div className="space-y-2">
-          <Label htmlFor="manual-image-select">
+        <div className="space-y-2 ylpm-slide-in-up">
+          <div className="ylpm-section-header">
             4. 投稿したい画像を選択
-          </Label>
+          </div>
           <div className="text-sm text-muted-foreground mb-1">
             投稿に使用する画像を選択してください。
             <br />
@@ -1566,11 +1565,11 @@ const PostForm: React.FC<PostFormProps> = ({
 
         {/* 5. Platform-specific Content and Settings */}
         {selectedPlatforms.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-3 ylpm-slide-in-up">
             <div className="space-y-2">
-              <Label>
+              <div className="ylpm-section-header">
                 5. プラットフォーム別設定
-              </Label>
+              </div>
               <div className="text-sm text-muted-foreground">
                 投稿内容の下書きを清書してください。プラットフォーム毎に送信タイミングを分けたい場合は、個別スケジュール設定をONにして設定してください。
                 <br />
@@ -1595,7 +1594,7 @@ const PostForm: React.FC<PostFormProps> = ({
                   return (
                     <Card
                       key={platform}
-                      className={`p-4 ${hasError ? "border-red-300 bg-red-50" : ""}`}
+                      className={`p-4 ylpm-glass-card ylpm-bounce-in ${hasError ? "border-red-300 bg-red-50" : ""}`}
                     >
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
@@ -1847,12 +1846,12 @@ const PostForm: React.FC<PostFormProps> = ({
                 <Button
                   type="button"
                   onClick={() => handleFormSubmit(true)}
-                  variant="secondary"
                   disabled={
                     selectedPlatforms.length === 0 ||
                     isGeneratingDraft ||
                     isSubmitting
                   }
+                  className="ylpm-btn-success"
                 >
                   {isSubmitting ? (
                     <>
@@ -1892,6 +1891,7 @@ const PostForm: React.FC<PostFormProps> = ({
                     hasValidationErrors ||
                     isSubmitting
                   }
+                  className="ylpm-btn-gradient ylpm-glow"
                 >
                   {isSubmitting ? (
                     <>

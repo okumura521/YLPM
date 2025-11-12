@@ -483,9 +483,9 @@ export default function UserSettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen ylpm-animated-bg p-4">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center">
+        <div className="flex items-center ylpm-fade-in">
           <Button
             variant="outline"
             onClick={() => navigate("/dashboard")}
@@ -498,9 +498,9 @@ export default function UserSettingsPage() {
               <img
                 src="/YLPM.png"
                 alt="YLPM Logo"
-                className="w-12 h-12 rounded-lg object-cover"
+                className="w-12 h-12 rounded-lg object-cover ylpm-float"
               />
-              <h1 className="text-3xl font-bold">ユーザ設定</h1>
+              <h1 className="text-3xl font-bold ylpm-section-header">ユーザ設定</h1>
             </div>
             <p className="text-muted-foreground mt-2">ユーザ設定を行います</p>
           </div>
@@ -524,18 +524,18 @@ export default function UserSettingsPage() {
         </div>
 
         {/* AI Settings */}
-        <Card>
+        <Card className="ylpm-glass-card ylpm-slide-in-up">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="flex items-center gap-2">
+                <div className="ylpm-section-header flex items-center gap-2">
                   AI連携設定
-                </CardTitle>
+                </div>
                 <CardDescription>AI サービスの設定と管理</CardDescription>
               </div>
               <Button
                 onClick={() => setIsAddDialogOpen(true)}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 ylpm-btn-gradient"
               >
                 <Plus className="h-4 w-4" />
                 新規追加
@@ -555,7 +555,7 @@ export default function UserSettingsPage() {
             ) : (
               <div className="space-y-4">
                 {aiSettingsList.map((setting, index) => (
-                  <Card key={index} className="p-4">
+                  <Card key={index} className="p-4 ylpm-glass-card">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
@@ -614,9 +614,9 @@ export default function UserSettingsPage() {
         </Card>
 
         {/* Make Webhook Settings */}
-        <Card>
+        <Card className="ylpm-glass-card ylpm-slide-in-up">
           <CardHeader>
-            <CardTitle>Make Webhook設定</CardTitle>
+            <div className="ylpm-section-header">Make Webhook設定</div>
             <CardDescription>
               即時投稿時にMakeシナリオを起動するWebhook URLを設定します
             </CardDescription>
@@ -650,6 +650,7 @@ Make.comでWebhookモジュールを追加すると自動生成されます。"
               <Button
                 onClick={handleWebhookSave}
                 disabled={webhookSaving || !webhookUrl.trim()}
+                className="ylpm-btn-gradient"
               >
                 {webhookSaving && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -660,6 +661,7 @@ Make.comでWebhookモジュールを追加すると自動生成されます。"
                 variant="outline"
                 onClick={handleWebhookTest}
                 disabled={webhookTesting || !webhookUrl.trim()}
+                className="ylpm-btn-success"
               >
                 {webhookTesting && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -671,9 +673,9 @@ Make.comでWebhookモジュールを追加すると自動生成されます。"
         </Card>
 
         {/* Display Settings */}
-        <Card>
+        <Card className="ylpm-glass-card ylpm-slide-in-up">
           <CardHeader>
-            <CardTitle>表示設定</CardTitle>
+            <div className="ylpm-section-header">表示設定</div>
             <CardDescription>
               文字サイズやレイアウトの表示設定を変更できます
             </CardDescription>
@@ -749,9 +751,9 @@ Make.comでWebhookモジュールを追加すると自動生成されます。"
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md ylpm-glass-card-modal">
           <DialogHeader>
-            <DialogTitle>AI設定編集 - {editingService?.ai_service}</DialogTitle>
+            <div className="ylpm-section-header">AI設定編集 - {editingService?.ai_service}</div>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -806,7 +808,7 @@ Make.comでWebhookモジュールを追加すると自動生成されます。"
               >
                 キャンセル
               </Button>
-              <Button onClick={handleEditSave} disabled={loading || aiTesting}>
+              <Button onClick={handleEditSave} disabled={loading || aiTesting} className="ylpm-btn-gradient">
                 {(loading || aiTesting) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
@@ -819,9 +821,9 @@ Make.comでWebhookモジュールを追加すると自動生成されます。"
 
       {/* Add New Service Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md ylpm-glass-card-modal">
           <DialogHeader>
-            <DialogTitle>新しいAI設定を追加</DialogTitle>
+            <div className="ylpm-section-header">新しいAI設定を追加</div>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -907,6 +909,7 @@ OpenAI、Anthropic、Googleから選択できます。"
               <Button
                 onClick={handleAddService}
                 disabled={loading || aiTesting}
+                className="ylpm-btn-gradient"
               >
                 {(loading || aiTesting) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -35,26 +35,31 @@ export default function UpdateHistoryPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div>読み込み中...</div>
+      <div className="min-h-screen ylpm-animated-bg flex items-center justify-center">
+        <div className="ylpm-glass-card p-8 ylpm-bounce-in">
+          <div className="flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00BCD4]"></div>
+            <div className="text-lg font-medium">読み込み中...</div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen ylpm-animated-bg">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="ylpm-glass-card shadow-sm border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
               <img
-                src="/logo.jpg"
+                src="/YLPM.png"
                 alt="YLPM Logo"
-                className="w-10 h-10 rounded-lg object-cover"
+                className="w-10 h-10 rounded-lg object-cover ylpm-float"
               />
               <div>
-                <h1 className="text-xl font-semibold">
+                <h1 className="text-xl font-semibold ylpm-section-header">
                   Yell-lab-PostMate{" "}
                   <span className="text-sm text-muted-foreground">Ver.0.4</span>
                 </h1>
@@ -92,9 +97,9 @@ export default function UpdateHistoryPage() {
           </Button>
         </div>
 
-        <Card>
+        <Card className="ylpm-glass-card ylpm-slide-in-up">
           <CardHeader>
-            <CardTitle>更新履歴</CardTitle>
+            <CardTitle className="ylpm-section-header">更新履歴</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">

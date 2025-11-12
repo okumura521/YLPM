@@ -29,16 +29,16 @@ export function HelpButton({ pageTitle, sections, className }: HelpButtonProps) 
         variant="outline"
         size="sm"
         onClick={() => setIsOpen(true)}
-        className={`flex items-center gap-2 ${className || ''}`}
+        className={`flex items-center gap-2 border-2 border-[#00BCD4] text-[#00BCD4] hover:bg-[#00BCD4] hover:text-white transition-all duration-300 shadow-md hover:shadow-lg ${className || ''}`}
       >
         <HelpCircle className="h-4 w-4" />
         ヘルプ
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto ylpm-glass-card-modal">
           <DialogHeader>
-            <DialogTitle className="text-2xl">{pageTitle}の使い方</DialogTitle>
+            <div className="ylpm-section-header text-2xl">{pageTitle}の使い方</div>
             <DialogDescription>
               このページの機能と使い方を説明します
             </DialogDescription>

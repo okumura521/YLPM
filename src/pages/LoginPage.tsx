@@ -8,16 +8,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -55,80 +50,6 @@ export default function LoginPage() {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const handleEmailLogin = async () => {
-    if (!email || !password) {
-      toast({
-        title: "入力エラー",
-        description: "メールアドレスとパスワードを入力してください",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Test user login
-    if (email === "admin" && password === "ylpm") {
-      try {
-        setLoading(true);
-        // Store test user session in localStorage
-        localStorage.setItem(
-          "testUser",
-          JSON.stringify({
-            id: "test-user-id",
-            email: "admin@ylpm.test",
-            user_metadata: {
-              full_name: "Test User",
-              avatar_url:
-                "https://api.dicebear.com/7.x/avataaars/svg?seed=admin",
-            },
-            created_at: new Date().toISOString(),
-          }),
-        );
-
-        toast({
-          title: "ログイン成功",
-          description: "テストユーザーでログインしました",
-        });
-
-        // Navigate to dashboard page
-        navigate("/dashboard", { replace: true });
-        return;
-      } catch (error) {
-        toast({
-          title: "ログインエラー",
-          description: "予期しないエラーが発生しました",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        toast({
-          title: "ログインエラー",
-          description: error.message,
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "ログインエラー",
-        description: "予期しないエラーが発生しました",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
@@ -164,72 +85,33 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen ylpm-animated-bg flex items-center justify-center p-4">
+      <Card className="w-full max-w-md ylpm-glass-card ylpm-bounce-in">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center mb-4">
             <img
               src="/YLPM.png"
               alt="YLPM Logo"
-              className="w-16 h-16 rounded-lg"
+              className="w-16 h-16 rounded-lg ylpm-float"
             />
           </div>
-          <CardTitle className="text-2xl font-bold">YLPM</CardTitle>
+          <div className="text-2xl font-bold ylpm-section-header">YLPM</div>
           <CardDescription>SNS投稿管理システムにログイン</CardDescription>
         </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="google" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="email">ID・パスワード</TabsTrigger>
-              <TabsTrigger value="google">Google</TabsTrigger>
-            </TabsList>
-            <TabsContent value="email" className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">メールアドレス</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="メールアドレスを入力"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">パスワード</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="パスワードを入力"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-              <Button
-                onClick={handleEmailLogin}
-                disabled={loading}
-                className="w-full"
-                size="lg"
-              >
-                {loading ? "ログイン中..." : "ログイン"}
-              </Button>
-            </TabsContent>
-            <TabsContent value="google" className="space-y-4 mt-4">
-              <Button
-                onClick={handleGoogleLogin}
-                disabled={loading}
-                className="w-full"
-                size="lg"
-              >
-                {loading ? "ログイン中..." : "Googleでログイン"}
-              </Button>
-              <p className="text-sm text-muted-foreground text-center">
-                Googleアカウントでログインして、SNS投稿を一元管理しましょう
-              </p>
-            </TabsContent>
-          </Tabs>
+        <CardContent className="space-y-4">
+          <Button
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full ylpm-btn-gradient ylpm-glow"
+            size="lg"
+          >
+            {loading ? "ログイン中..." : "Googleでログイン"}
+          </Button>
+          <p className="text-sm text-muted-foreground text-center">
+            Googleアカウントでログインして、SNS投稿を一元管理しましょう
+          </p>
         </CardContent>
-      </Card>
-      <div className="mt-6 text-center text-sm text-muted-foreground">
+              <div className="mt-6 text-center text-sm text-muted-foreground">
         <Link to="/privacy-policy" className="hover:underline">
           プライバシーポリシー
         </Link>
@@ -238,6 +120,8 @@ export default function LoginPage() {
           利用規約
         </Link>
       </div>
+      </Card>
+
     </div>
   );
 }

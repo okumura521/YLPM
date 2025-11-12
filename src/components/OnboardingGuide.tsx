@@ -16,7 +16,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: 'ステップ1: Google Sheetsを作成',
-    description: '投稿データを保存するためのGoogle Sheetを作成します。\n\n【手順】\n① このガイドを閉じた後、画面中央の「Google Sheets作成・管理」カードをクリック\n② 「Google Sheet を作成」ボタンを押す\n③ これで投稿データの保存先が作成されます（初回のみ必要）',
+    description: '投稿データを保存するためのGoogle Sheetを作成します。\n\n【手順】\n① このガイドを閉じた後、画面中央の「投稿データ保存先の作成・管理」カードをクリック\n② 「Google Sheet & drive を作成」ボタンを押す\n③ これで投稿データの保存先が作成されます（初回のみ必要）',
   },
   {
     title: 'ステップ2: AI設定（オプション）',
@@ -70,45 +70,50 @@ export function OnboardingGuide() {
   const isLastStep = currentStep === ONBOARDING_STEPS.length - 1;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-gradient-to-br from-black/60 via-[#00BCD4]/20 to-[#FF9800]/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <AnimatePresence mode="wait">
         <motion.div
           key={currentStep}
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.2 }}
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: -20 }}
+          transition={{ duration: 0.3, type: "spring", stiffness: 300, damping: 30 }}
         >
-          <Card className="max-w-2xl w-full relative">
+          <Card className="max-w-2xl w-full relative ylpm-glass-card-modal ylpm-bounce-in shadow-2xl">
             <Button
               variant="ghost"
               size="icon"
-              className="absolute right-2 top-2"
+              className="absolute right-2 top-2 hover:bg-[#00BCD4]/10 transition-colors"
               onClick={handleSkip}
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4 text-[#00BCD4]" />
             </Button>
 
             <CardHeader className="pb-4">
-              <CardTitle className="text-2xl">{step.title}</CardTitle>
+              <CardTitle className="text-3xl ylpm-section-header">{step.title}</CardTitle>
             </CardHeader>
 
             <CardContent className="space-y-6">
-              <p className="text-lg leading-relaxed text-muted-foreground whitespace-pre-line">
-                {step.description}
-              </p>
+              <div className="p-6 rounded-lg bg-gradient-to-br from-[#00BCD4]/5 to-[#FF9800]/5 border-l-4 border-[#00BCD4]">
+                <p className="text-base leading-relaxed text-gray-700 whitespace-pre-line font-medium">
+                  {step.description}
+                </p>
+              </div>
 
               {/* Progress indicators */}
-              <div className="flex justify-center gap-2">
+              <div className="flex justify-center gap-3">
                 {ONBOARDING_STEPS.map((_, index) => (
-                  <div
+                  <motion.div
                     key={index}
-                    className={`h-2 rounded-full transition-all duration-300 ${
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: index * 0.1 }}
+                    className={`h-3 rounded-full transition-all duration-500 ${
                       index === currentStep
-                        ? 'w-8 bg-primary'
+                        ? 'w-12 bg-gradient-to-r from-[#00BCD4] to-[#00ACC1] ylpm-glow shadow-lg'
                         : index < currentStep
-                        ? 'w-2 bg-primary/50'
-                        : 'w-2 bg-gray-300'
+                        ? 'w-3 bg-gradient-to-r from-[#00BCD4] to-[#00ACC1] opacity-60'
+                        : 'w-3 bg-gray-300'
                     }`}
                   />
                 ))}
@@ -121,7 +126,7 @@ export function OnboardingGuide() {
                     <Button
                       variant="outline"
                       onClick={handlePrevious}
-                      className="flex items-center gap-2"
+                      className="flex items-center gap-2 border-2 border-[#00BCD4]/50 text-[#00BCD4] hover:bg-[#00BCD4]/10 transition-all duration-300"
                     >
                       <ChevronLeft className="h-4 w-4" />
                       戻る
@@ -130,7 +135,7 @@ export function OnboardingGuide() {
                   <Button
                     variant="outline"
                     onClick={handleSkip}
-                    className="text-muted-foreground"
+                    className="text-muted-foreground hover:bg-gray-100 transition-all duration-300"
                   >
                     スキップ
                   </Button>
@@ -138,25 +143,31 @@ export function OnboardingGuide() {
 
                 <Button
                   onClick={handleNext}
-                  className="flex items-center gap-2 min-w-[120px]"
+                  className={`flex items-center gap-2 min-w-[140px] ${
+                    isLastStep
+                      ? 'ylpm-btn-success ylpm-glow'
+                      : 'ylpm-btn-gradient ylpm-glow'
+                  } text-lg py-6`}
                 >
                   {isLastStep ? (
                     <>
-                      <Check className="h-4 w-4" />
-                      完了
+                      <Check className="h-5 w-5" />
+                      完了して始める
                     </>
                   ) : (
                     <>
                       次へ
-                      <ChevronRight className="h-4 w-4" />
+                      <ChevronRight className="h-5 w-5" />
                     </>
                   )}
                 </Button>
               </div>
 
               {/* Step counter */}
-              <div className="text-center text-sm text-muted-foreground">
-                {currentStep + 1} / {ONBOARDING_STEPS.length}
+              <div className="text-center">
+                <span className="inline-block px-4 py-2 rounded-full bg-gradient-to-r from-[#00BCD4]/10 to-[#FF9800]/10 border-2 border-[#00BCD4]/30 text-sm font-semibold text-[#00BCD4]">
+                  ステップ {currentStep + 1} / {ONBOARDING_STEPS.length}
+                </span>
               </div>
             </CardContent>
           </Card>
